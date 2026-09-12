@@ -1,0 +1,74 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thejobstash",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-09-01",
+  // nodejs_compat: Next's own runtime reaches for node builtins (Buffer,
+  // async_hooks) whatever this app does. The app's own code no longer does -
+  // node:sqlite, node:fs, node:crypto and child_process are all gone.
+  "compatibility_flags": ["nodejs_compat"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // The live site. Custom domains create and manage their own DNS records and
+  // certificate in the thejobstash.com zone - there is no A record to point
+  // anywhere, because there is no origin server to point at.
+  "routes": [
+    { "pattern": "thejobstash.com", "custom_domain": true },
+    { "pattern": "www.thejobstash.com", "custom_domain": true }
+  ],
+
+  // The shared job pool, users, entitlements and sessions. D1 is SQLite, so
+  // every query that ran against the local jobstash.db runs here unchanged -
+  // and db.py on the home machine talks to this same database through d1.py,
+  // which is what keeps one pool and one set of scoring rules.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "jobstash",
+      "database_id": "62bf7121-3b14-4af2-bf67-6ae4dabf1a36",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Rendered digests. The machine that renders them PUTs each pair to
+  // /api/internal/digest, because this Worker has no disk and no route back
+  // to that machine.
+  // Commented out until the R2 subscription is added to the account (free
+  // tier, but it is still a billing agreement to accept). Both routes that
+  // touch the bucket already handle the binding being absent, so the site
+  // runs without it - only the dashboard's "download a past digest" button
+  // is unavailable. The emailed PDF is unaffected.
+  // "r2_buckets": [
+  //   {
+  //     "binding": "DIGESTS",
+  //     "bucket_name": "jobstash-digests"
+  //   }
+  // ],
+
+  "vars": {
+    // The named tunnel on Justin's machine. Stable across restarts, unlike a
+    // quick tunnel's random trycloudflare.com name. Not a secret - the bearer
+    // token is what actually guards it.
+    "JOBSTASH_PY_ORIGIN": "https://scorer.thejobstash.com"
+  }
+
+  // Secrets (never in this file - `npx wrangler secret put <NAME>`):
+  //   JOBSTASH_PY_TOKEN              shared with py_server.py and r2.py
+  //   JOBSTASH_GOOGLE_CLIENT_ID      when Google sign-in is switched on
+  //   JOBSTASH_GOOGLE_CLIENT_SECRET
+  //   JOBSTASH_GOOGLE_REDIRECT_URI
+  //
+  // No cron trigger here on purpose. The daily delivery still runs from n8n
+  // on the home machine, because that is where the Python and the renderer
+  // live - and run_delivery.py now writes straight into D1. Moving the
+  // schedule up here would mean a Worker waking a machine that may be asleep,
+  // which is worse than the machine deciding for itself.
+}

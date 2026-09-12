@@ -1,0 +1,6 @@
+
+# Database dump for seeding D1 - real user data, never commit.
+seed.sql
+.open-next/
+.wrangler/
+cloudflare-env.d.ts

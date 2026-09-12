@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* TheJobStash — neo-brutalist system.
+   Thick rules, hard offset shadows, flat saturated blocks, one heavy grotesk.
+   Nothing here is decorative: the borders carry the hierarchy, so the same
+   design survives being printed into the emailed PDF.
+
+   The palette lives in tailwind.config.ts, which carries the full rationale
+   and the measured contrast ratios. Short version — ten tokens, five roles:
+
+     ink    near-black: borders, rules, body text, dark cards, the footer
+     bone   warm newsprint, the page ground
+     paper  white, for cards
+
+     azure  IDENTITY    — the hero and the closing CTA, the two blue bands
+     flare  ACTION      — primary buttons and focus rings, nothing else
+     sun    ATTENTION   — near-misses, blockers, the marquee
+     jade   POSITIVE    — strong matches, score chips
+     lime   THE NUMBER  — the one figure a block exists to state
+     grape  SHOWCASE    — the single purple band, a ground only
+     coral  QUIET WARM  — the FAQ band, deliberately not flare
+
+   The rules below are only the compound primitives that would otherwise be
+   repeated forty times in the JSX. Everything that varies per-instance —
+   layout, spacing, and which of the three accents a block wears — is a
+   utility on the element, so a band's colour is legible where it is used
+   rather than buried in a stylesheet. */
+
+@layer base {
+  html { scroll-behavior: smooth; }
+
+  body {
+    @apply bg-bone text-ink font-sans antialiased leading-normal overflow-x-hidden;
+    /* Sticky footer. The short pages — login, signup, upload — are a nav, one
+       card and the footer, which on a tall monitor left the footer floating in
+       the middle of the screen above a band of bone. Column flex plus
+       `mt-auto` on the footer pins it down without giving it a fixed height it
+       would have to lie about. */
+    @apply flex flex-col min-h-screen;
+  }
+
+  /* Whichever block is the page body takes the slack. `flex-shrink-0` matters:
+     without it a long dashboard is squeezed instead of scrolling. */
+  body > main { @apply flex-[1_0_auto]; }
+
+  a { color: inherit; }
+
+  h1, h2, h3 { @apply font-extrabold tracking-[-0.03em] leading-[1.02]; }
+
+  label {
+    @apply block text-xs font-extrabold uppercase tracking-[0.08em] mb-[7px];
+  }
+
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="number"], select {
+    @apply w-full border-3 border-ink bg-paper px-[14px] py-[13px]
+           text-[15px] font-semibold text-ink;
+    font-family: inherit;
+  }
+
+  /* Flare, not ink: an ink ring outside an ink border just reads as a thicker
+     border, so the hue change is the signal rather than the weight. Flare is
+     tuned to clear 3:1 on both sides of itself - 5.16 against the ink border
+     it hugs, 3.50 against the paper behind it. See the note in
+     tailwind.config.ts for why that decided the token's value. */
+  input:focus, select:focus {
+    @apply outline outline-4 outline-flare outline-offset-1;
+  }
+}
+
+@layer components {
+  .wrap   { @apply max-w-wrap mx-auto px-6 max-[560px]:px-4; }
+  .narrow { @apply max-w-narrow mx-auto px-6 max-[560px]:px-4; }
+
+  /* A horizontal section. Colour is never set here — every band picks its own
+     accent as a utility at the call site. */
+  .band {
+    @apply border-b-3 border-ink py-[88px] max-[560px]:py-[52px];
+  }
+  .band-tight { @apply py-14 max-[560px]:py-9; }
+
+  /* Single-card pages. The padding is far tighter than a normal band because
+     these have to fit one screen: at 1440x900 the 88px band alone accounted
+     for 176px of the 390px overflow. */
+  .band-solo {
+    @apply flex items-center py-[26px]
+           max-[760px]:block max-[760px]:py-[34px]
+           sq1:py-[10px] sq3:py-[6px] sq4:py-[3px];
+  }
+  .band-solo > * { @apply w-full; }
+
+  /* Colour is set explicitly, never inherited. A card dropped inside an ink
+     section — "how it works", the dashboard header — would otherwise inherit
+     that section's bone text and render it on its own white background. */
+  .card {
+    @apply border-3 border-ink bg-paper text-ink shadow-brut p-6
+           max-[560px]:p-[18px];
+  }
+
+  /* Flare is the action colour and the only default a button has. Ink takes
+     over wherever the button sits on flare itself, which it would otherwise
+     fight rather than lead. Ink is the only variant that inverts — no accent
+     here holds white text. */
+  .btn {
+    @apply inline-block border-3 border-ink bg-flare text-ink font-extrabold
+           text-[15px] px-[26px] py-[14px] shadow-brut cursor-pointer
+           no-underline transition-[transform,box-shadow] duration-[80ms]
+           ease-out max-[560px]:px-[18px] max-[560px]:py-3
+           max-[560px]:text-sm;
+    font-family: inherit;
+  }
+  /* The press: the button travels into its own shadow and lands flat. */
+  .btn:hover  { @apply translate-x-[2px] translate-y-[2px] shadow-brut-sm; }
+  .btn:active { @apply translate-x-[5px] translate-y-[5px] shadow-none; }
+  .btn:disabled {
+    @apply opacity-55 cursor-not-allowed translate-x-0 translate-y-0 shadow-brut;
+  }
+  .btn-ink   { @apply bg-ink text-bone; }
+  .btn-paper { @apply bg-paper; }
+  .btn-sm {
+    @apply px-4 py-[9px] text-[13px] shadow-brut-sm
+           max-[560px]:px-[11px] max-[560px]:py-[7px] max-[560px]:text-xs
+           max-[560px]:shadow-brut-xs;
+  }
+
+  .eyebrow {
+    @apply inline-block text-[11px] font-extrabold uppercase
+           tracking-[0.12em] border-3 border-ink px-3 py-1.5 bg-paper;
+  }
+  .tag {
+    @apply inline-block border-2 border-ink bg-paper text-ink px-[9px] py-[3px]
+           text-[11px] font-extrabold uppercase tracking-[0.06em];
+  }
+
+  /* A section rule that is itself a block: heading left, count right. */
+  .sechead {
+    @apply border-3 border-ink shadow-brut px-[18px] py-[13px] mt-[30px] mb-4
+           flex justify-between items-baseline gap-[14px] flex-wrap
+           max-[560px]:px-[14px] max-[560px]:py-[11px];
+  }
+
+  .lede { @apply text-[17px] leading-[1.55] max-w-[60ch] max-[560px]:text-[15.5px]; }
+}
+
+/* The marquee runs on a duplicated track, so the -50% translate lands exactly
+   where it started. Kept out of the components layer because the animation is
+   the whole rule. */
+.marquee-inner { @apply inline-block animate-slide; }
+@media (prefers-reduced-motion: reduce) {
+  .marquee-inner { animation: none; }
+}
+
+/* Native disclosure markers are replaced everywhere — the system has no round
+   edges and no browser-drawn triangles. */
+summary::-webkit-details-marker { display: none; }

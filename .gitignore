@@ -1,0 +1,23 @@
+# Secrets — never commit
+.env.cloudflare
+web/.env.local
+.claude/settings.local.json
+
+# Real user data: accounts, password hashes, session tokens, subscriber emails
+jobstash.db
+jobstash.db-journal
+web/seed.sql
+outbox/
+
+# Build output / deps
+web/node_modules/
+web/.next/
+web/.open-next/
+web/.wrangler/
+web/cloudflare-env.d.ts
+web/tsconfig.tsbuildinfo
+__pycache__/
+*.pyc
+
+# Local noise
+*.log
