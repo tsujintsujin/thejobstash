@@ -17,9 +17,9 @@ import { SECHEAD_NOTE } from "@/app/ui";
 /* Everything that names a human, in one place. A policy that repeats an
    address in nine paragraphs is nine edits when it changes.
    >>> Swap these for the live details before the site goes public. <<< */
-export const OPERATOR = "Justin Masiga";
-export const CONTACT_EMAIL = "justin.masiga.94@gmail.com";
-export const EFFECTIVE = "11 September 2026";
+export const OPERATOR = "TSUJIN IT SOLUTIONS";
+export const CONTACT_EMAIL = "thejobstash@gmail.com";
+export const EFFECTIVE = "14 September 2026";
 
 export type Section = {
   id: string;

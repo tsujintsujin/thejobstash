@@ -24,9 +24,8 @@ export const metadata: Metadata = {
  * source, which is the only kind worth making:
  *
  *   db.py SCHEMA            users / profiles / sessions / sent_jobs /
- *                           deliveries / entitlements / trial_runs
+ *                           deliveries / runs / payments
  *   api/resume/route.ts     temp file, unlinked in `finally`; text is kept
- *   api/trial/route.ts      anonymous scan - caller IP only, nothing else
  *   lib/session.ts          the one cookie, httpOnly + lax + secure
  *   lib/google.ts           scopes: openid email profile, and no more
  *   mailer.py               Resend, only when JOBSTASH_RESEND_KEY is set
@@ -40,23 +39,20 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <P>
-          TheJobStash is run by {OPERATOR}, an independent developer, as a
-          one-person operation. There is no company behind it and no staff. For
-          data-protection purposes that person is the controller of the
-          information described here, and is the one who answers the address at
-          the bottom of this page.
+          TheJobStash is run by {OPERATOR}. For data-protection purposes{" "}
+          {OPERATOR} is the controller of the information described here, and
+          a person there answers the address at the bottom of this page.
         </P>
         <P>
-          This policy covers the TheJobStash website, the account area and the
-          job digests sent by email. It does not cover the job boards the
+          This policy covers the TheJobStash website, the account area and the job digests produced each time you run your resume. It does not cover the job boards the
           listings are scraped from, or the employer sites you land on after
           clicking a listing — those are other people&rsquo;s services with
           their own policies.
         </P>
         <Note>
-          The product is in testing. Payments are switched off and plans are
-          granted free, which is why there is no billing section below: no card
-          details are collected, because there is nothing to collect them for.
+          The product is in testing. Credits are bought through PayMongo, which
+          runs the checkout itself: card and e-wallet details go to them and
+          never reach us. What is kept about a purchase is listed below.
         </Note>
       </>
     ),
@@ -79,7 +75,7 @@ const SECTIONS: Section[] = [
             ],
             [
               "A password, if you set one",
-              "never stored as you typed it. It is salted and hashed with PBKDF2-SHA256 over 120,000 rounds; the original cannot be recovered from what is kept, including by us.",
+              "never stored as you typed it. It is salted and hashed with PBKDF2-SHA256 over 100,000 rounds; the original cannot be recovered from what is kept, including by us.",
             ],
             [
               "Your Google account id, if you sign in with Google",
@@ -88,19 +84,15 @@ const SECTIONS: Section[] = [
             ["Your resume", "in the form described in the next section."],
             [
               "What has already been sent to you",
-              "which jobs appeared in your digests and on which day, so day four never repeats day one; plus the date, the match and near-miss counts, and whether the email went out.",
+              "which jobs appeared in your digests, so a later run never repeats an earlier one; plus the date, the match and near-miss counts, and whether the email went out.",
             ],
             [
-              "Your plan",
-              "which plan you were granted and the dates it runs between.",
+              "Your credits and purchases",
+              "your credit balance, each run and whether it finished, and for each pack you buy: its size, the amount, PayMongo's checkout reference and when it was paid. No card or e-wallet details — PayMongo holds those.",
             ],
             [
               "A session record",
               "a random token, when it was created and when it expires, matched against the cookie in your browser.",
-            ],
-            [
-              "For free scans without an account, your IP address",
-              "recorded with a timestamp and a match count, and used for exactly one thing: refusing a fifth scan within an hour. Running the scorer for anybody who asks is otherwise an open invitation to be hammered.",
             ],
           ]}
         />
@@ -143,10 +135,6 @@ const SECTIONS: Section[] = [
               "It is never shown to employers",
               "TheJobStash reads public job listings and sends them to you. It does not apply on your behalf, does not forward your resume, and does not sell or pass your details to recruiters. There is nobody at the other end of this reading your CV.",
             ],
-            [
-              "An anonymous scan keeps nothing",
-              "run the free scan on the front page without an account and the file is parsed, scored and deleted. No profile is written and no resume text is stored.",
-            ],
           ]}
         />
         <Note>
@@ -175,11 +163,11 @@ const SECTIONS: Section[] = [
           rows={[
             [
               "Performance of a contract",
-              "your email address, your password or Google id, your resume text and derived profile, your entitlement and your delivery history. These are what the service you asked for is made of; without them there is nothing to deliver.",
+              "your email address, your password or Google id, your resume text and derived profile, your credit balance, purchases and delivery history. These are what the service you asked for is made of; without them there is nothing to deliver.",
             ],
             [
               "Legitimate interests",
-              "the session record, and the IP address behind an anonymous scan. Both exist to keep the service standing up: one so you stay signed in, the other so the scorer cannot be run in a loop by anyone who feels like it. Neither is used to profile you or to advertise to you.",
+              "the session record, and the attempt records behind the sign-in and sign-up limits. Both exist to keep the service standing up: one so you stay signed in, the other so nobody can guess passwords or mass-create accounts. Neither is used to profile you or to advertise to you.",
             ],
             [
               "Consent",
@@ -236,12 +224,16 @@ const SECTIONS: Section[] = [
               "only if you choose to sign in with Google. Google tells us your subject id, email address and basic profile; nothing about you goes back the other way, and your resume is never part of that exchange.",
             ],
             [
+              "PayMongo",
+              "only if you buy credits. PayMongo runs the checkout, so your card or e-wallet details go to them and never reach us. They receive the amount and a reference for the purchase; they do not receive your resume or your digests.",
+            ],
+            [
               "Resend",
               "the email provider that delivers your digest once live sending is switched on. It receives your email address and the digest itself — your matched listings and the attached PDF. It does not receive your resume file or your stored resume text.",
             ],
             [
-              "The hosting provider",
-              "the server the site runs on necessarily holds the database on its disks.",
+              "Cloudflare",
+              "hosts the site and the account database, so it necessarily holds that data on its disks. Resume scoring and digest rendering run on our own server.",
             ],
             [
               "Nobody else",
@@ -269,9 +261,10 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <P>
-          Listings are scraped from public job boards once a day into a single
-          shared pool — before any user is involved, and without reference to
-          anyone&rsquo;s profile. Your resume is then scored against that pool
+          Listings are scraped from public job boards into a single shared
+          pool. A sweep runs when somebody runs their resume and the pool is
+          more than half an hour old, and it collects every listing it finds —
+          without reference to anyone&rsquo;s profile. Your resume is then scored against that pool
           on our own server.
         </P>
         <P>
@@ -298,18 +291,14 @@ const SECTIONS: Section[] = [
             "until you delete the resume, or the account. Uploading a new resume replaces the old one outright.",
           ],
           [
-            "Account, plan and delivery history",
+            "Account, credits, purchases and delivery history",
             "until you ask for the account to be deleted.",
           ],
           [
             "Rendered digests",
-            "the HTML and PDF of each day are kept on the server so the dashboard can re-open a past digest, and go with the account.",
+            "the HTML and PDF of each run are kept on the server so the dashboard can re-open a past digest, and go with the account.",
           ],
           ["Sessions", "thirty days, or until you sign out."],
-          [
-            "Anonymous scan records",
-            "an IP address, a timestamp and a match count, kept only as long as the hourly limit needs them and of no use for anything else.",
-          ],
           [
             "Scraped job listings",
             "kept in the shared pool regardless of who is signed up. These are public postings by companies, not personal data about you.",
@@ -347,7 +336,7 @@ const SECTIONS: Section[] = [
                 from the address the account uses, and say which. Deleting the
                 resume removes the stored text, the derived profile and your
                 delivery history; deleting the account removes those plus the
-                account itself, the plan and the rendered digests. Both are an
+                account itself, the credit balance and the rendered digests. Both are an
                 email rather than a button for now, because the self-service
                 controls are not on the dashboard yet — when they are, this
                 line changes.
@@ -359,7 +348,7 @@ const SECTIONS: Section[] = [
             ],
             [
               "Stop the emails",
-              "deleting your resume stops the digests immediately, because there is then nothing to score. Live sending is not switched on yet; a one-click unsubscribe link will be in every digest before the first one is sent, and until then the address below stops them.",
+              "a digest is only produced when you run your resume yourself, so nothing is sent unless you ask for it. Deleting your resume stops them entirely, because there is then nothing to score.",
             ],
           ]}
         />
@@ -379,7 +368,7 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <P>
-          Passwords are salted and hashed with PBKDF2-SHA256 over 120,000 rounds
+          Passwords are salted and hashed with PBKDF2-SHA256 over 100,000 rounds
           and are never stored or logged in readable form. Sessions are
           server-side records referenced by an httpOnly cookie rather than a
           self-contained token, which means a session can be revoked outright
@@ -471,8 +460,7 @@ export default function PrivacyPage() {
           <>
             <p className="mb-2">
               Your resume is read on our own server by ordinary code, scored
-              against public job listings, and the text is kept so tomorrow
-              works too. The file itself is deleted within minutes.
+              against public job listings, and the text is kept so your next run works too. The file itself is deleted within minutes.
             </p>
             <p className="mb-2">
               It is <strong>never sold</strong>, never shown to employers or

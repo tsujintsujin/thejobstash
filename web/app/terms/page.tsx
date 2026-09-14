@@ -39,8 +39,8 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <P>
-          These terms are between you and {OPERATOR}, who builds and runs
-          TheJobStash as an independent developer. Using the site, creating an
+          These terms are between you and {OPERATOR}, which builds and runs
+          TheJobStash. Using the site, creating an
           account or uploading a resume means you accept them. If you do not,
           the remedy is simple and free: do not use the service.
         </P>
@@ -61,9 +61,9 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <P>
-          TheJobStash scrapes public job boards once a day into a shared pool,
-          scores that pool against the resume you upload, and sends you the
-          listings that matched — along with the ones that came close and the
+          TheJobStash sweeps public job boards into a shared pool, scores that
+          pool against the resume you upload each time you run it, and hands
+          you the listings that matched — along with the ones that came close and the
           reason each of those fell short.
         </P>
         <P>That is the whole of it. In particular, it does not:</P>
@@ -81,24 +81,36 @@ const SECTIONS: Section[] = [
   },
   {
     id: "beta",
-    title: "It is in testing, and it is free",
+    title: "It is in testing, and runs cost credits",
     body: (
       <>
         <Note>
-          Payments are switched off. Plans are granted free on request, there is
-          no card on file, and nothing here charges you for anything.
+          Every account starts with one free credit. After that, credits are
+          bought in packs through PayMongo. There is no subscription and nothing
+          recurs: you are charged once, when you buy a pack.
         </Note>
         <P>
-          The product is being built in the open. Features change, digests may
-          be late or missed, and the service can go down without notice. Free
-          means free — but it also means the thing you are using is not a
+          One credit is one run of your resume — the boards swept, the postings
+          scored, a digest produced. The credit is taken when the run starts,
+          and handed back automatically if the run fails. A run that works but
+          finds little still uses its credit, because the sweep and the scoring
+          happened. Credits do not expire. A digest file that arrives broken is refunded
+          too; the{" "}
+          <Link href="/refunds" className="underline">
+            Refund Policy
+          </Link>{" "}
+          explains how.
+        </P>
+        <P>
+          The product is being built in the open. Features change and the
+          service can go down without notice. The thing you are using is not a
           finished, guaranteed product, and it would be dishonest to write these
           terms as though it were.
         </P>
         <P>
-          If paid plans are switched on later, prices, billing and refund terms
-          will be published before anyone is charged, and no existing account
-          will be billed for something it did not agree to.
+          Payments are processed by PayMongo, so card and e-wallet details go to
+          them, not to us. Prices are shown before you pay, and a price change
+          never affects credits you already hold.
         </P>
       </>
     ),
@@ -120,7 +132,7 @@ const SECTIONS: Section[] = [
             ],
             [
               "One person, one account",
-              "the free scan is rate-limited per address for a reason; do not work around it by farming accounts.",
+              "the free credit is one per person; do not work around it by farming accounts.",
             ],
             [
               "Tell us if it is compromised",
@@ -179,7 +191,7 @@ const SECTIONS: Section[] = [
             ],
             [
               "Break into it",
-              "no probing for holes, no attempts to reach another user's account or data, no bypassing the rate limits or the paywall.",
+              "no probing for holes, no attempts to reach another user's account or data, no bypassing the rate limits or the credit system.",
             ],
             [
               "Upload things that are not resumes",
@@ -206,7 +218,7 @@ const SECTIONS: Section[] = [
           The listings come from other people&rsquo;s job boards, which means
           their accuracy is theirs and not ours. A posting can be filled,
           withdrawn, expired, duplicated, mis-titled or fake by the time it
-          reaches your inbox, and no amount of scoring on this end fixes a bad
+          reaches you, and no amount of scoring on this end fixes a bad
           listing on that one. Check anything before you act on it, and treat a
           listing that asks you for money or personal documents up front with
           the suspicion it deserves.
@@ -223,7 +235,7 @@ const SECTIONS: Section[] = [
             ],
             [
               "No guarantee of a given number of matches",
-              "some days the pool is thin. A short honest digest is the intended behaviour, not a fault.",
+              "some runs find little that fits. A short honest digest is the intended behaviour, not a fault.",
             ],
             [
               "No guarantee of uptime or delivery",
@@ -255,8 +267,8 @@ const SECTIONS: Section[] = [
         <P>
           Where liability cannot be excluded, it is capped at whatever you have
           actually paid for the service in the twelve months before the claim.
-          Payments are switched off, so for now that figure is zero, and it
-          would be dishonest to imply otherwise.
+          In practice that is what you paid for credit packs in that period,
+          and it would be dishonest to imply the cap is anything larger.
         </P>
         <P>
           None of this limits anything that cannot be limited by law: death or
@@ -366,14 +378,13 @@ export default function TermsPage() {
         summary={
           <>
             <p className="mb-2">
-              We score public job listings against your resume and email you the
-              ones that fit. We do not apply for you, and we cannot promise you
+              We score public job listings against your resume and hand you the ones that fit. We do not apply for you, and we cannot promise you
               a job — the listings are other people&rsquo;s and some of them
               will be stale or wrong, so check before you act.
             </p>
             <p className="mb-2">
-              It is free and in testing. Payments are off, so nothing charges
-              you and nothing is guaranteed to be up.
+              It is in testing. Runs cost credits bought through PayMongo; your
+              first is free, nothing recurs, and nothing is guaranteed to be up.
             </p>
             <p>
               Your resume stays yours. Do not hammer the service or resell the
