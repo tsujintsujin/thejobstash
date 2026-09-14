@@ -1,20 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { ALERT, SPINNER } from "../ui";
+import { ALERT, SECHEAD_NOTE, SPINNER } from "../ui";
+import type { Section } from "../legal/shell";
+import { TERMS, TERMS_SUMMARY } from "../legal/terms";
+import { PRIVACY, PRIVACY_SUMMARY } from "../legal/privacy";
+
+type Legal = "terms" | "privacy";
+
+const LEGAL: Record<Legal, { label: string; summary: React.ReactNode; sections: Section[] }> = {
+  terms: { label: "Terms", summary: TERMS_SUMMARY, sections: TERMS },
+  privacy: { label: "Privacy Policy", summary: PRIVACY_SUMMARY, sections: PRIVACY },
+};
+
+/* A button that has to read as a link: opening the legal panel is state, not
+   navigation. */
+const LINK_BTN =
+  "font-[inherit] text-inherit bg-transparent border-0 p-0 cursor-pointer " +
+  "underline underline-offset-2";
+
+const CLOSE =
+  "bg-transparent border-0 text-ink text-[20px] leading-none px-2 py-1.5 " +
+  "cursor-pointer font-[inherit] opacity-60 hover:opacity-100 " +
+  "focus-visible:outline focus-visible:outline-3 focus-visible:outline-flare";
 
 type Mode = "create" | "signin";
-
-/** Sent as the plan when somebody chooses to decide later. The signup route
- *  knows this value and skips granting an entitlement for it. */
-const NO_PLAN = "none";
-
-const PLANS = [
-  { id: "one_time", name: "One sweep", detail: "A single deep pass" },
-  { id: "three_day", name: "Three days", detail: "Then 2 daily digests" },
-  { id: "seven_day", name: "Seven days", detail: "Then 6 daily digests" },
-];
 
 /* ---------------------------------------------------------------------------
    The height-keyed squeeze. These pages have to fit one screen without
@@ -85,7 +97,7 @@ function GoogleMark() {
  * beneath them, which read as three different layouts stacked on each other.
  *
  * The card is NOT held to one height across the two faces. An earlier version
- * kept the plan picker in the layout on the sign-in face, hidden with
+ * kept the sign-up-only rows in the layout on the sign-in face, hidden with
  * `visibility`, so both measured identically - but that left a 185px hole
  * between the password field and the button. The page itself no longer
  * scrolls in either mode, so there is nothing left for a rigid height to
@@ -98,6 +110,8 @@ export default function AuthCard({
   initialError = "",
   pool,
   sources,
+  inModal = false,
+  onClose,
 }: {
   initialMode: Mode;
   next: string;
@@ -105,23 +119,87 @@ export default function AuthCard({
   initialError?: string;
   pool: number;
   sources: number;
+  /** Mounted in a dialog on some other page, so the URL is not ours to edit. */
+  inModal?: boolean;
+  /** The dialog's close. Rendered inside the card so it travels with it. */
+  onClose?: () => void;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [plan, setPlan] = useState("seven_day");
   const [err, setErr] = useState(initialError);
   const [busy, setBusy] = useState(false);
 
+  // The legal panel. `legalTab` outlives `legalOpen` so the text stays put
+  // while the panel slides back out.
+  const [legalOpen, setLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<Legal>("terms");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const agreeRef = useRef<HTMLInputElement>(null);
+
+  function showLegal(t: Legal) {
+    setLegalTab(t);
+    setLegalOpen(true);
+  }
+
   const creating = mode === "create";
+
+  // The sign-in face is shorter. Holding it at the create face's measured
+  // height keeps the card from jumping when the tabs switch; everything in the
+  // form column is top-aligned, so the spare room lands below the last line.
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [createH, setCreateH] = useState(0);
+  useLayoutEffect(() => {
+    if (creating && cardRef.current) setCreateH(cardRef.current.offsetHeight);
+  }, [creating]);
+
+  // Google opens in a popup, which reports back over this channel when it is
+  // done (see the callback route). In a dialog the page underneath reloads so
+  // it renders signed in; on /signup it goes where the callback says.
+  useEffect(() => {
+    const ch = new BroadcastChannel("jobstash-auth");
+    ch.onmessage = ({ data }) => {
+      if (data?.error) return setErr(data.error);
+      if (!data?.redirect) return; // cancelled on Google's screen
+      if (inModal) window.location.reload();
+      else window.location.href = data.redirect;
+    };
+    return () => ch.close();
+  }, [inModal]);
+
+  function openGoogle(e: React.MouseEvent<HTMLAnchorElement>) {
+    // The same agreement the form's required checkbox enforces; this link
+    // sits outside the form, so it has to ask for it itself.
+    if (agreeRef.current && !agreeRef.current.checked) {
+      e.preventDefault();
+      agreeRef.current.reportValidity();
+      return;
+    }
+    const w = 480;
+    const h = 640;
+    const win = window.open(
+      `${e.currentTarget.href}&popup=1`,
+      "jobstash-google",
+      `popup,width=${w},height=${h},` +
+        `left=${Math.round(window.screenX + (window.outerWidth - w) / 2)},` +
+        `top=${Math.round(window.screenY + (window.outerHeight - h) / 2)}`
+    );
+    // Popup blocked: let the link do the full-page redirect it always did.
+    if (!win) return;
+    e.preventDefault();
+    setErr("");
+  }
 
   function switchTo(m: Mode) {
     if (m === mode || busy) return;
     setMode(m);
     setErr("");
     // The URL follows the card so a reload, a back button or a shared link all
-    // land on the face the person was actually looking at.
+    // land on the face the person was actually looking at. In a dialog it does
+    // not: the address bar belongs to the page underneath.
+    if (inModal) return;
     const parts = [
       m === "signin" ? "mode=signin" : "",
       next === "/dashboard" ? "" : `next=${encodeURIComponent(next)}`,
@@ -141,7 +219,7 @@ export default function AuthCard({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(
-        creating ? { email, password, plan } : { email, password, next }
+        creating ? { email, password } : { email, password, next }
       ),
     });
     const j = (await r.json().catch(() => ({}))) as any;
@@ -167,31 +245,29 @@ export default function AuthCard({
     "focus-visible:-outline-offset-3 " +
     (on ? "bg-ink text-bone" : "bg-transparent text-ink hover:bg-bone");
 
-  /* Choosing a plan is a positive selection, so it wears jade. */
-  const planRow = (on: boolean, defer = false) =>
-    "flex items-baseline justify-between gap-2.5 border-2 border-ink text-ink " +
-    "px-3 py-2 font-[inherit] text-left cursor-pointer " +
-    "sq1:px-2.5 sq1:py-1.5 sq1:flex-col sq1:items-start sq1:gap-0 " +
-    "sq3:px-2.5 sq3:py-[5px] sq4:px-2.5 sq4:py-1 " +
-    (defer ? "border-dashed mt-1 sq1:mt-0 " : "") +
-    (on
-      ? defer
-        ? "bg-bone shadow-brut-sm"
-        : "bg-jade shadow-brut-sm"
-      : "bg-paper");
-
   return (
+    <>
+    {/* With the legal panel open the card drops its ink panel, narrows to the
+        form column and slides to the centre of the right half. Both mounts
+        centre the card in the viewport, so 25vw is exactly that distance. */}
     <div
-      className="card p-0 shadow-brut-lg grid grid-cols-[0.82fr_1fr]
-                 overflow-hidden max-[760px]:grid-cols-1"
+      ref={cardRef}
+      style={{ minHeight: creating ? undefined : createH || undefined }}
+      className={`card p-0 shadow-brut-lg grid overflow-hidden mx-auto
+                  transition-[transform,max-width] duration-300 ease-out
+                  max-[760px]:grid-cols-1 max-[760px]:translate-x-0
+                  ${legalOpen
+                    ? "grid-cols-1 max-w-[min(440px,calc(50vw-48px))] translate-x-[25vw]"
+                    : "grid-cols-[0.82fr_1fr] max-w-[960px]"}`}
     >
       {/* Centred, not top-aligned: the panel carries less than the form column,
           and pinned to the top it left a dead third at the bottom of the card.
           It is also the first thing to go on a phone — it is context, not the
           task. */}
       <aside
-        className={`bg-ink text-bone border-r-3 border-ink flex flex-col
-                    justify-center max-[760px]:hidden ${PANEL_PAD}`}
+        className={`bg-ink text-bone border-r-3 border-ink flex-col
+                    justify-center max-[760px]:hidden ${PANEL_PAD}
+                    ${legalOpen ? "hidden" : "flex"}`}
       >
         {/* The pitch, not the wordmark - the nav and the footer already say
             the name twice, and a third would be the only thing this panel
@@ -229,7 +305,18 @@ export default function AuthCard({
         </ul>
       </aside>
 
-      <div className={`min-w-0 ${PANEL_PAD}`}>
+      {/* In the dialog the close button sits in this column's top-right
+          corner, so the tabs start lower to leave it room. */}
+      <div className={`relative min-w-0 ${PANEL_PAD} ${inModal ? "!pt-12" : ""}`}>
+        {onClose && (
+          <button
+            className={`${CLOSE} absolute top-3 right-3.5 z-10`}
+            onClick={onClose}
+            aria-label="Close"
+          >
+            ✕
+          </button>
+        )}
         {/* One shared frame with an internal divider, so it reads as one
             control with two faces rather than two buttons that happen to sit
             together. */}
@@ -294,48 +381,6 @@ export default function AuthCard({
             />
           </div>
 
-          {creating && (
-            <div className={FIELD}>
-              <label>Plan — free while testing</label>
-              {/* Full-width rows: three chips across a 380px column left every
-                  label wrapping onto two lines. On a short window they go two
-                  across, which halves the single tallest thing on this face. */}
-              <div className="grid gap-1.5 sq1:grid-cols-2 sq3:gap-[5px] sq4:gap-1">
-                {PLANS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setPlan(p.id)}
-                    className={planRow(plan === p.id)}
-                    aria-pressed={plan === p.id}
-                  >
-                    <b className="text-[13.5px] font-extrabold">{p.name}</b>
-                    <span className="text-[11.5px] font-semibold opacity-70">
-                      {p.detail}
-                    </span>
-                  </button>
-                ))}
-
-                {/* Deferring is the absence of a plan, so it does not wear the
-                    plan colour. Dashed, set slightly apart, and bone rather
-                    than jade when chosen. Nothing is lost by choosing it: the
-                    dashboard's plan picker grants a window on demand through
-                    the same call. */}
-                <button
-                  type="button"
-                  onClick={() => setPlan(NO_PLAN)}
-                  className={planRow(plan === NO_PLAN, true)}
-                  aria-pressed={plan === NO_PLAN}
-                >
-                  <b className="text-[13.5px] font-bold">Not yet</b>
-                  <span className="text-[11.5px] font-semibold opacity-70">
-                    Just create my account
-                  </span>
-                </button>
-              </div>
-            </div>
-          )}
-
           <button
             className="btn w-full text-center sq3:px-[18px] sq3:py-2 sq3:text-sm
                        sq4:px-4 sq4:py-[7px]"
@@ -357,11 +402,31 @@ export default function AuthCard({
               agreed, and a second copy of it is just noise on a card that is
               fighting for vertical space. */}
           {creating && (
-            <p className={`${HINT} mt-2.5 text-center sq3:mt-1.5`}>
-              By creating an account you agree to the{" "}
-              <a href="/terms" className="underline">Terms</a> and the{" "}
-              <a href="/privacy" className="underline">Privacy Policy</a>.
-            </p>
+            <label
+              className="flex items-start justify-center gap-2 mt-2.5 mb-0
+                         sq3:mt-1.5 text-[12.5px] font-semibold normal-case
+                         tracking-normal cursor-pointer"
+            >
+              {/* `required` blocks the submit natively; openGoogle checks it
+                  for the Google button. */}
+              <input
+                ref={agreeRef}
+                type="checkbox"
+                required
+                className="mt-0.5 w-4 h-4 flex-none accent-ink cursor-pointer"
+              />
+              <span className="opacity-70">
+                By creating an account you agree to the{" "}
+                <button type="button" className={LINK_BTN} onClick={() => showLegal("terms")}>
+                  Terms
+                </button>{" "}
+                and the{" "}
+                <button type="button" className={LINK_BTN} onClick={() => showLegal("privacy")}>
+                  Privacy Policy
+                </button>
+                .
+              </span>
+            </label>
           )}
         </form>
 
@@ -375,6 +440,7 @@ export default function AuthCard({
           <a
             className={GOOGLE}
             href={`/api/auth/google?next=${encodeURIComponent(next)}`}
+            onClick={openGoogle}
           >
             <GoogleMark />
             {googleLabel}
@@ -428,5 +494,64 @@ export default function AuthCard({
         </p>
       </div>
     </div>
+
+    {/* Portalled: a fixed panel inside the card would be positioned against
+        the card's transform, not the screen. It stays mounted so it can slide
+        out as well as in; `inert` keeps it out of reach while hidden. */}
+    {mounted &&
+      createPortal(
+        <aside
+          role="dialog"
+          aria-label="Terms and Privacy Policy"
+          inert={!legalOpen}
+          className={`fixed inset-y-0 left-0 z-[110] w-1/2 max-[760px]:w-full
+                      bg-bone text-ink border-r-3 border-ink flex flex-col
+                      transition-transform duration-300 ease-out
+                      ${legalOpen ? "translate-x-0" : "-translate-x-full"}`}
+        >
+          <div className="flex border-b-3 border-ink bg-paper">
+            <div className="grid grid-cols-2 flex-1" role="group" aria-label="Terms or Privacy Policy">
+              {(["terms", "privacy"] as const).map((t, i) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setLegalTab(t)}
+                  aria-pressed={legalTab === t}
+                  className={`${tab(legalTab === t)} ${i ? "border-l-3 border-ink" : ""}`}
+                >
+                  {LEGAL[t].label}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={`${CLOSE} border-l-3 border-ink !px-4`}
+              onClick={() => setLegalOpen(false)}
+              aria-label="Close Terms and Privacy Policy"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Keyed so switching tabs starts the new document at the top. */}
+          <div key={legalTab} className="flex-1 overflow-y-auto p-6 max-[560px]:p-4">
+            <div className="card bg-jade shadow-brut mb-7">
+              <h2 className="text-h3 mb-3">The short version</h2>
+              <div className="text-[15px] leading-[1.6]">{LEGAL[legalTab].summary}</div>
+            </div>
+            {LEGAL[legalTab].sections.map((s, i) => (
+              <section key={s.id} id={s.id}>
+                <div className="sechead bg-paper">
+                  <h2 className="text-h3">{s.title}</h2>
+                  <em className={SECHEAD_NOTE}>{String(i + 1).padStart(2, "0")}</em>
+                </div>
+                {s.body}
+              </section>
+            ))}
+          </div>
+        </aside>,
+        document.body
+      )}
+    </>
   );
 }
