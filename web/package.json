@@ -12,7 +12,8 @@
     "migration:gen": "python scripts/gen_migration.py",
     "d1:migrate": "wrangler d1 migrations apply jobstash --remote",
     "d1:local": "wrangler d1 migrations apply jobstash --local",
-    "d1:seed": "python scripts/export_for_d1.py && wrangler d1 execute jobstash --remote --file=seed.sql"
+    "d1:seed": "python scripts/export_for_d1.py && wrangler d1 execute jobstash --remote --file=seed.sql",
+    "predeploy": "node scripts/predeploy.js"
   },
   "dependencies": {
     "next": "^15.1.6",
