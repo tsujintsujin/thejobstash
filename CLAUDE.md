@@ -192,7 +192,10 @@ python test_cloudflare.py    # 40 checks — the D1 shim vs real sqlite3
 **Deploys go PC → GitHub → Cloudflare, never PC → Cloudflare.** Push to
 `master` on `tsujintsujin/thejobstash`; Cloudflare Workers Builds (connected to
 the repo, root `web/`) runs `npx opennextjs-cloudflare build` then
-`npx opennextjs-cloudflare deploy`. `npm run deploy` exits 1 so nobody ships
+`npx opennextjs-cloudflare deploy`. Connected 2026-09-14: GitHub app
+"Cloudflare Workers and Pages" is installed on `tsujintsujin` for this one repo
+only; preview builds are off; Cloudflare holds its own build token ("Workers
+Builds - 2026-09-14 20:45"). `npm run deploy` exits 1 so nobody ships
 code that is not on GitHub. Emergency undo is `npx wrangler rollback`, not a
 local deploy.
 
