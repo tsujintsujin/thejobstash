@@ -312,3 +312,13 @@ export async function recordAttempts(...keys: string[]) {
     )
   );
 }
+
+/** Just the profile JSON. updated_at is deliberately left alone: the
+ *  dashboard shows it as when the resume was read, and switching a skill off
+ *  does not re-read anything. */
+export async function saveProfileJson(userId: string, profileJson: string) {
+  await db()
+    .prepare("UPDATE profiles SET profile_json=? WHERE user_id=?")
+    .bind(profileJson, userId)
+    .run();
+}

@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
-import { deliveriesFor, profileFor, poolStats } from "@/lib/db";
+import { deliveriesFor, profileFor } from "@/lib/db";
 import DigestPanel from "./DigestPanel";
 import DeleteDigest from "./DeleteDigest";
 import BuyCredits from "./BuyCredits";
-import { G3, SECHEAD_NOTE, STAT, STAT_L, STAT_N } from "../ui";
+import SkillToggles from "./SkillToggles";
+import { STAT, STAT_L, STAT_N } from "../ui";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,6 @@ const FACT_K =
   "block text-[10px] font-extrabold uppercase tracking-[0.09em] opacity-70";
 const FACT_V =
   "block text-[19px] font-extrabold mt-[3px] tracking-[-0.02em]";
-const FACT_NOTE =
-  "block not-italic text-[11.5px] font-semibold opacity-65 mt-[3px] leading-[1.35]";
 
 export default async function Dashboard() {
   const user = await currentUser();
@@ -30,10 +29,9 @@ export default async function Dashboard() {
 
   // Independent reads, so they go together rather than one after the other -
   // each is a network round trip to D1 now, not a local file read.
-  const [profile, deliveries, stats] = await Promise.all([
+  const [profile, deliveries] = await Promise.all([
     profileFor(user.id),
     deliveriesFor(user.id),
-    poolStats(),
   ]);
   const parsed = profile ? JSON.parse(profile.profile_json) : null;
   const credits = user.credits ?? 0;
@@ -56,7 +54,7 @@ export default async function Dashboard() {
         {/* Status row. Only the account's state is coloured — four accented
             tiles would rank nothing, and this is a working surface rather
             than a landing page. */}
-        <div className={`${G3} mb-2`}>
+        <div className="grid gap-4 grid-cols-2 max-[620px]:grid-cols-1 mb-2">
           <div className={`${STAT} ${credits ? "bg-jade" : "bg-sun"}`}>
             <b className={STAT_N}>{credits}</b>
             <span className={STAT_L}>
@@ -67,16 +65,11 @@ export default async function Dashboard() {
             <b className={STAT_N}>{deliveries.length}</b>
             <span className={STAT_L}>Stash so far</span>
           </div>
-          <div className={`${STAT} bg-paper`}>
-            <b className={STAT_N}>{stats.pool.toLocaleString()}</b>
-            <span className={STAT_L}>Jobs in the pool</span>
-          </div>
         </div>
 
         {/* resume */}
         <div className="sechead bg-paper">
           <h2 className="text-xl">Your resume</h2>
-          <em className={SECHEAD_NOTE}>What everything gets scored against</em>
         </div>
 
         {profile ? (
@@ -100,51 +93,32 @@ export default async function Dashboard() {
             </div>
 
             {/* The attributes that actually decide what gets scored in, laid
-                out rather than crammed into one dot-separated line. Each cell
-                is label, value, and one line saying what that value does — a
-                number with no consequence attached is trivia. Skills are the
-                long tail and are folded away; see below. */}
+                out rather than crammed into one dot-separated line. Skills are
+                the long tail and are folded away; see below. */}
             <div className={FACTS}>
               <div className={FACT}>
                 <span className={FACT_K}>Experience</span>
                 <b className={FACT_V}>{parsed.years_experience ?? "—"} yrs</b>
-                <em className={FACT_NOTE}>relevant to this field</em>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Seniority</span>
                 <b className={`${FACT_V} capitalize`}>{parsed.level}</b>
-                <em className={FACT_NOTE}>roles above this are a stretch</em>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Based in</span>
                 <b className={`${FACT_V} capitalize`}>{parsed.home_country}</b>
-                <em className={FACT_NOTE}>
-                  {(parsed.authorized_in || []).length
-                    ? `authorised to work in ${(parsed.authorized_in || [])
-                        .join(", ")
-                        .toUpperCase()}`
-                    : "no work authorisation recorded"}
-                </em>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Work setup</span>
                 <b className={FACT_V}>
                   {parsed.remote_only ? "Remote only" : "Remote or onsite"}
                 </b>
-                <em className={FACT_NOTE}>
-                  {parsed.wants_local_onsite
-                    ? "onsite near you is fine"
-                    : "onsite roles are filtered out"}
-                </em>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Skills</span>
                 <b className={FACT_V}>
                   {Object.keys(parsed.strong_skills || {}).length}
                 </b>
-                <em className={FACT_NOTE}>
-                  a job needs {parsed.min_skill_hits} of them to qualify
-                </em>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Sponsorship</span>
@@ -153,16 +127,12 @@ export default async function Dashboard() {
                     ? (parsed.sponsorship_targets || []).join(", ").toUpperCase()
                     : "Not sought"}
                 </b>
-                <em className={FACT_NOTE}>
-                  {(parsed.sponsorship_targets || []).length
-                    ? "visa-sponsoring roles are kept"
-                    : "roles requiring relocation are dropped"}
-                </em>
               </div>
             </div>
 
             {/* Closed by default: 28 tags is a wall, and the count above is
-                the part that matters day to day. */}
+                the part that matters day to day. Open, each one is a switch —
+                see SkillToggles. */}
             <details className="group">
               <summary
                 className="text-[12.5px] font-extrabold cursor-pointer list-none
@@ -173,15 +143,10 @@ export default async function Dashboard() {
                 Show the {Object.keys(parsed.strong_skills || {}).length} skills
                 read from this resume
               </summary>
-              <div className="flex gap-1.5 flex-wrap mt-3">
-                {Object.keys(parsed.strong_skills || {})
-                  .sort()
-                  .map((s) => (
-                    <span key={s} className="tag">
-                      {s}
-                    </span>
-                  ))}
-              </div>
+              <SkillToggles
+                skills={Object.keys(parsed.strong_skills || {}).sort()}
+                disabled={parsed.disabled_skills || []}
+              />
             </details>
           </div>
         ) : (
@@ -198,21 +163,17 @@ export default async function Dashboard() {
           </div>
         )}
 
-        {/* digest — the main event, so it takes the dark head. */}
-        <div className="sechead bg-ink text-bone">
-          <h2 className="text-xl">Run your resume</h2>
-          <em className={SECHEAD_NOTE}>
-            One credit one sweep
-          </em>
+        {/* The section head that used to sit here is gone, and the button
+            inside DigestPanel labels itself, so this only has to restore the
+            gap the head was providing. */}
+        <div className="mt-[30px]">
+          <DigestPanel hasProfile={!!profile} credits={credits} />
         </div>
-
-        <DigestPanel hasProfile={!!profile} credits={credits} />
 
         {/* credits — sun only when the balance is empty, because that is when
             buying is the next thing to do. */}
         <div id="buy" className={`sechead scroll-mt-4 ${credits ? "bg-paper" : "bg-sun"}`}>
           <h2 className="text-xl">Buy credits</h2>
-          <em className={SECHEAD_NOTE}>One credit is one run. They don&rsquo;t expire.</em>
         </div>
         <BuyCredits />
 
@@ -221,7 +182,6 @@ export default async function Dashboard() {
           <>
             <div className="sechead bg-paper">
               <h2 className="text-xl">Stash</h2>
-              <em className={SECHEAD_NOTE}>Every one is still downloadable</em>
             </div>
             {deliveries.map((d) => (
               <div
@@ -234,10 +194,6 @@ export default async function Dashboard() {
                     <div className="text-[13.5px] font-semibold mt-1.5">
                       <b className="font-extrabold">{d.matches}</b> matches ·{" "}
                       <b className="font-extrabold">{d.near_misses}</b> came close
-                    </div>
-                    <div className="text-xs opacity-70 mt-1 font-semibold">
-                      email: {d.email_status}
-                      {d.email_status === "outbox" && " (written to outbox/)"}
                     </div>
                   </div>
                   {/* ?v= is a cache-buster, not a parameter the route reads.

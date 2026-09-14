@@ -260,6 +260,22 @@ for m in sorted(showable, key=lambda m: -m.score)[:5]:
     print("    [%3d] %-42s %s" % (m.score, m.job["title"][:42],
                                   m.blockers[0].detail))
 
+# -- switched-off skills --------------------------------------------------
+# A skill the user greyed out on the dashboard must not score, and the bar
+# must not stay above the number of skills left standing.
+off = Profile(user_id="test", role_families=p.role_families,
+              strong_skills=dict(p.strong_skills), min_skill_hits=3,
+              family_skills=["react", "typescript"],
+              disabled_skills=["React", "typescript", "next.js"])
+check("disabled skills dropped", sorted(off.strong_skills),
+      ["javascript", "tailwind"])
+check("family skills dropped", off.family_skills, [])
+check("bar clamped to what is left", off.min_skill_hits, 2)
+check("react no longer scores",
+      "react" in " ".join(M.score(job("React Developer", "Remote - Philippines",
+                                    "react typescript"), off).reasons),
+      False)
+
 print()
 print("=" * 68)
 print("unit checks: %d passed, %d failed" % (ok, fail))
