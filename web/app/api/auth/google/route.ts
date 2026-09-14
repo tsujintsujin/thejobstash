@@ -40,17 +40,6 @@ export async function GET(req: NextRequest) {
     maxAge: 600,
     secure: process.env.NODE_ENV === "production",
   });
-  // Opened from the card as a popup: the callback then answers with a page
-  // that hands the result back to the opener instead of redirecting.
-  const popup = req.nextUrl.searchParams.get("popup") === "1";
-  (await cookies()).set("jobstash_oauth_popup", popup ? "1" : "", {
-    httpOnly: true,
-    sameSite: "lax",
-    path: "/",
-    maxAge: popup ? 600 : 0,
-    secure: process.env.NODE_ENV === "production",
-  });
-
   const u = new URL(googleAuthEndpoint());
   u.searchParams.set("client_id", googleClient().id);
   u.searchParams.set("redirect_uri", googleRedirectUri());

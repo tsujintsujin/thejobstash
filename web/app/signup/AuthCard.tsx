@@ -155,41 +155,15 @@ export default function AuthCard({
     if (creating && cardRef.current) setCreateH(cardRef.current.offsetHeight);
   }, [creating]);
 
-  // Google opens in a popup, which reports back over this channel when it is
-  // done (see the callback route). In a dialog the page underneath reloads so
-  // it renders signed in; on /signup it goes where the callback says.
-  useEffect(() => {
-    const ch = new BroadcastChannel("jobstash-auth");
-    ch.onmessage = ({ data }) => {
-      if (data?.error) return setErr(data.error);
-      if (!data?.redirect) return; // cancelled on Google's screen
-      if (inModal) window.location.reload();
-      else window.location.href = data.redirect;
-    };
-    return () => ch.close();
-  }, [inModal]);
-
+  // Google is a full-page redirect, not a popup: after Google's pages a popup
+  // can no longer close itself (see the callback route).
   function openGoogle(e: React.MouseEvent<HTMLAnchorElement>) {
     // The same agreement the form's required checkbox enforces; this link
     // sits outside the form, so it has to ask for it itself.
     if (agreeRef.current && !agreeRef.current.checked) {
       e.preventDefault();
       agreeRef.current.reportValidity();
-      return;
     }
-    const w = 480;
-    const h = 640;
-    const win = window.open(
-      `${e.currentTarget.href}&popup=1`,
-      "jobstash-google",
-      `popup,width=${w},height=${h},` +
-        `left=${Math.round(window.screenX + (window.outerWidth - w) / 2)},` +
-        `top=${Math.round(window.screenY + (window.outerHeight - h) / 2)}`
-    );
-    // Popup blocked: let the link do the full-page redirect it always did.
-    if (!win) return;
-    e.preventDefault();
-    setErr("");
   }
 
   function switchTo(m: Mode) {
