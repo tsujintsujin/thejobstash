@@ -1,23 +1,49 @@
-# Secrets — never commit
-.env.cloudflare
-web/.env.local
+# Secrets — never commit. Any env file anywhere; only the examples are shared.
+.env*
+!.env*.example
+.dev.vars*
+*.pem
 .claude/settings.local.json
+
+ingest.lock
 
 # Real user data: accounts, password hashes, session tokens, subscriber emails
 jobstash.db
-jobstash.db-journal
+*.db
+*.db-*
+*.sqlite*
 web/seed.sql
 outbox/
+backups/
+# Stray .sql at the root is always a one-off dump or purge script built
+# from live rows. The Worker's own migrations are the exception.
+*.sql
+!web/migrations/*.sql
+# Resumes, rendered digests and mail - personal data wherever they land.
+*.pdf
+*.docx
+*.eml
 
 # Build output / deps
-web/node_modules/
+node_modules/
 web/.next/
 web/.open-next/
 web/.wrangler/
 web/cloudflare-env.d.ts
 web/tsconfig.tsbuildinfo
+web/next-env.d.ts
 __pycache__/
 *.pyc
+
+# Local tooling and machine-specific files
+.claude/
+.tokensave/
+graphify-out/
+fix-dns.cmd
+# Dated session notes. The lasting docs (HANDOFF.md, HANDOFF-CLOUDFLARE.md,
+# SPEC-*, PLAN-*) stay tracked.
+HANDOFF-20*.md
+UPDATE-20*.md
 
 # Local noise
 *.log
