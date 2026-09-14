@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createUser, userByEmail, grantPlan } from "@/lib/db";
-import { createSession } from "@/lib/session";
+import { hashPassword, recordAttempts, tooManyAttempts, userByEmail } from "@/lib/db";
+import { sendMail } from "@/lib/mail";
+import { discardCode, newCode, storeCode } from "@/lib/otp";
 
-/** Mirrors /api/plan. "none" is not in here: it is the absence of a plan. */
-const VALID_PLANS = ["one_time", "three_day", "seven_day"];
-const NO_PLAN = "none";
-
+/**
+ * First half of password sign-up: email a code. No account exists until that
+ * code comes back to /api/auth/signup/verify, so an address the person cannot
+ * read never becomes an account. Sending again is calling this again - a new
+ * code replaces the old one.
+ */
 export async function POST(req: NextRequest) {
   // Cast, not `any`: workerd types json() as `unknown` (Next typed it
   // `any`). Every field below is still String()-coerced and validated,
@@ -13,14 +16,6 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   const email = String(body.email || "").trim().toLowerCase();
   const password = String(body.password || "");
-  const plan = String(body.plan || "seven_day");
-
-  // Validated rather than trusted. grantPlan() falls back to a 1-day window on
-  // an unrecognised id, so an unchecked value here quietly handed out a plan
-  // nobody chose.
-  if (plan !== NO_PLAN && !VALID_PLANS.includes(plan)) {
-    return NextResponse.json({ error: "Unknown plan." }, { status: 400 });
-  }
 
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ error: "That email doesn't look right." }, { status: 400 });
@@ -31,6 +26,28 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+  // Every account comes with a free run, so new accounts are the cheap way to
+  // farm runs. Five an hour from one connection is past any household sharing it.
+  // Recorded by the verify route, when an account actually gets created.
+  const ip = req.headers.get("cf-connecting-ip") || "unknown";
+  if (await tooManyAttempts(`signup-ip:${ip}`, 5, 60)) {
+    return NextResponse.json(
+      { error: "Too many new accounts from this connection. Try again later." },
+      { status: 429 }
+    );
+  }
+  // Each code is an email sent to whatever address was typed, which makes this
+  // form a way to flood a stranger's inbox. Capped per address and per connection.
+  if (
+    (await tooManyAttempts(`code:${email}`, 5, 60)) ||
+    (await tooManyAttempts(`code-ip:${ip}`, 20, 60))
+  ) {
+    return NextResponse.json(
+      { error: "Too many codes requested. Wait an hour and try again." },
+      { status: 429 }
+    );
+  }
+
   if (await userByEmail(email)) {
     return NextResponse.json(
       { error: "There's already an account with that email. Try signing in." },
@@ -38,15 +55,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const user = await createUser(email, password);
-  // Payments are off, so the plan is granted immediately. With Stripe this
-  // moves behind the webhook and nothing else changes.
-  //
-  // Signing up without one is allowed and leaves no entitlement row at all.
-  // Everything downstream already copes: the dashboard reads "0 days" and
-  // offers the picker, and delivery only ever serves entitled users.
-  if (plan !== NO_PLAN) await grantPlan(user.id, plan);
-  await createSession(user.id);
+  const code = newCode();
+  await storeCode(email, await hashPassword(password), code);
+  await recordAttempts(`code:${email}`, `code-ip:${ip}`);
 
-  return NextResponse.json({ ok: true, redirect: "/upload" });
+  try {
+    await sendMail(
+      email,
+      `${code} is your TheJobStash code`,
+      `Your TheJobStash sign-up code is ${code}.\n\n` +
+        "It expires in 10 minutes. If you didn't try to create an account, " +
+        "ignore this email - nothing happens without the code.",
+      `<p>Your TheJobStash sign-up code is</p>` +
+        `<p style="font-size:28px;font-weight:800;letter-spacing:6px">${code}</p>` +
+        `<p>It expires in 10 minutes. If you didn't try to create an account, ` +
+        `ignore this email - nothing happens without the code.</p>`
+    );
+  } catch {
+    await discardCode(email);
+    return NextResponse.json(
+      { error: "We couldn't send the code just now. Try again in a minute, or sign up with Google." },
+      { status: 503 }
+    );
+  }
+
+  return NextResponse.json({ ok: true, verify: true });
 }

@@ -216,7 +216,9 @@ class Profile:
     min_skill_hits: int = 3
 
     # --- how senior they are ------------------------------------------------
-    years_experience: int = 0
+    # None means the resume gave no usable employment dates. Unknown must stay
+    # unknown and must never gate - see score()'s seniority block.
+    years_experience: int = None
     level: str = "mid"
 
     # --- where they can work ------------------------------------------------
@@ -228,6 +230,13 @@ class Profile:
     sponsorship_targets: list = field(default_factory=list)
     remote_only: bool = True          # False = local onsite roles are welcome
     wants_local_onsite: bool = False
+    # Skills belonging to this profile's own role families. Used to decide
+    # whether a thin skill overlap is real evidence or cross-career noise:
+    # "excel" is a core admin skill and an incidental one for a developer,
+    # and without this distinction an RPA developer role matched a teacher's
+    # profile on the word excel alone. Empty for older stored profiles, which
+    # simply skips the check.
+    family_skills: list = field(default_factory=list)
     has_clearance: bool = False
     # None = derive from home_country. Boards state timezone windows far more
     # often than they state eligible countries, so this is load-bearing.

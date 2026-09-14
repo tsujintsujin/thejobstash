@@ -155,7 +155,7 @@ echo "-- meeting an account that already exists"
 
 PW_EMAIL="gpw-$STAMP@demo.test"
 r=$(curl -s -X POST "$BASE/api/auth/signup" -H 'Content-Type: application/json' \
-      -d "{\"email\":\"$PW_EMAIL\",\"password\":\"testing1234\",\"plan\":\"seven_day\"}")
+      -d "{\"email\":\"$PW_EMAIL\",\"password\":\"testing1234\"}")
 echo "$r" | grep -q '"ok":true' && ok "made a password account to collide with" || bad "setup password account" "$r"
 
 # Unverified: Google is not asserting this person owns the address, so linking

@@ -27,6 +27,40 @@ function config() {
   return { origin: origin.replace(/\/+$/, ""), token };
 }
 
+/**
+ * Fetch a BINARY file from the scorer machine, not JSON.
+ *
+ * call() below parses every response as JSON, which a PDF is not. Used by the
+ * digest download route: render.py writes the HTML and PDF to disk on the
+ * machine that scored the resume, and the Worker has no filesystem, so the
+ * only way to serve them without R2 is over the tunnel that is already there.
+ *
+ * Returns null when the scorer is unreachable or refuses, so the caller can
+ * say something true rather than throwing.
+ */
+export async function pyGetFile(
+  path: string,
+  accept: string,
+  timeoutMs = 20000
+): Promise<ArrayBuffer | null> {
+  const cfg = config();
+  if (!cfg) return null;
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const res = await fetch(cfg.origin + path, {
+      signal: abort.signal,
+      headers: { Accept: accept, Authorization: `Bearer ${cfg.token}` },
+    });
+    if (!res.ok) return null;
+    return await res.arrayBuffer();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function call(
   path: string,
   init: RequestInit,
@@ -83,7 +117,7 @@ async function call(
 }
 
 /**
- * `parse` and `trial`: the resume goes up as the raw request body.
+ * `parse`: the resume goes up as the raw request body.
  *
  * No temp file on this side any more - there is no disk on a Worker, and
  * there is no longer a reason to want one. The bytes are forwarded and
@@ -91,7 +125,7 @@ async function call(
  * a finally block.
  */
 export async function pyFile(
-  cmd: "parse" | "trial",
+  cmd: "parse",
   file: File,
   timeoutMs = 180000
 ): Promise<PyResult> {
@@ -106,17 +140,23 @@ export async function pyFile(
   );
 }
 
-/** `preview` and `deliver`: everything they need is already in the database. */
-export async function pyUser(
-  cmd: "preview" | "deliver",
+/**
+ * `run`: hand one user's run to n8n on the scorer machine.
+ *
+ * Returns as soon as n8n has accepted it. The run itself - a board sweep when
+ * the pool is stale, then scoring and rendering - finishes later and writes
+ * its own runs row, which the dashboard polls.
+ */
+export async function pyRun(
   userId: string,
-  timeoutMs = 180000
+  runId: string,
+  timeoutMs = 20000
 ): Promise<PyResult> {
   return call(
-    `/${cmd}`,
+    "/run",
     {
       method: "POST",
-      body: JSON.stringify({ user_id: userId }),
+      body: JSON.stringify({ user_id: userId, run_id: runId }),
       headers: { "Content-Type": "application/json" },
     },
     timeoutMs

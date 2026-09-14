@@ -32,15 +32,29 @@ from profiles import (Profile, TECH_VOCAB, COUNTRY_TOKENS, LEVEL_RANK,
 # ---------------------------------------------------------------------------
 ROLE_CATALOGUE = {
     "software": {
-        "titles": [r"\bdevelop(er|ment)\b", r"\bengineer(ing)?\b",
+        # These must stay job-title shaped, like every other family's. Bare
+        # common nouns here read as "this person is a developer" off ordinary
+        # prose: "consistent application of guidelines", "professional
+        # development", "Mobile: 0976...". One title hit scores 3, which is
+        # exactly the inclusion threshold in find_families(), so a single
+        # stray word was enough to put a teacher on a software profile and
+        # send them IT jobs. Same class of bug as the summariser splitting
+        # "Adobe Experience Manager" - see HANDOFF.md section 5.
+        "titles": [r"\bdeveloper\b",
+                   r"\b(software|web|application|product|game) development\b",
+                   r"\bengineer(ing)?\b",
                    r"\bprogrammer\b", r"\bfull.?stack\b", r"\bfront.?end\b",
-                   r"\bback.?end\b", r"\bsoftware\b", r"\bweb\b",
-                   r"\bapplication\b", r"\bmobile\b"],
+                   r"\bback.?end\b", r"\bsoftware\b",
+                   r"\bweb (developer|designer|engineer|programmer)\b",
+                   r"\bapplications? (developer|engineer|programmer)\b",
+                   r"\bmobile (developer|engineer|app|application)\b"],
         "skills": ["react", "next.js", "vue", "angular", "svelte", "typescript",
                    "javascript", "node", "express", "php", "laravel", "python",
                    "django", "flask", "java", "spring", "c#", ".net", "ruby",
                    "rails", "golang", "rust", "swift", "kotlin", "flutter",
-                   "react native", "html", "css", "tailwind", "graphql",
+                   "react native", "html", "css", "tailwind",
+                   "wordpress", "elementor", "woocommerce", "shopify", "wix",
+                   "webflow", "jquery", "bootstrap", "sass", "graphql",
                    "rest api", "postgres", "postgresql", "mysql", "mongodb",
                    "redis", "docker", "git", "aws", "azure", "gcp"],
     },
@@ -117,12 +131,46 @@ ROLE_CATALOGUE = {
                    "financial reporting", "gaap", "payroll", "taxation"],
     },
     "admin": {
+        # Audited 2026-09-12 against a real clerical resume. Three faults, all
+        # visible only by reading the excluded pile:
+        #
+        #  too narrow  "Legal File Clerk" and "Video Annotator" were excluded
+        #              outright - the second is literally what that resume asks
+        #              for - because no pattern here covered clerk, encoder,
+        #              annotator or transcriptionist.
+        #  too rigid   "Administrative & Bookkeeping Assistant" failed because
+        #              the old pattern needed the two words adjacent.
+        #  too loose   bare \boperations\b pulled in "Security Operations
+        #              Center", "Campaign Operations" and "Marketing
+        #              Operations" - different professions entirely. Same fault
+        #              as bare \bapplication\b in the software family.
         "titles": [r"\bvirtual assistant\b", r"\bexecutive assistant\b",
-                   r"\badmin(istrative)? (assistant|officer)\b",
-                   r"\bdata entry\b", r"\boperations\b", r"\bcoordinator\b"],
-        "skills": ["excel", "google workspace", "calendar management",
-                   "data entry", "scheduling", "travel arrangements",
-                   "microsoft office", "notion", "asana", "trello", "slack"],
+                   r"\badmin(istrative)?\b[\w&, /-]{0,24}\b"
+                   r"(assistant|officer|clerk|support|staff)\b",
+                   r"\bdata entry\b", r"\bdata encoder\b", r"\bencoder\b",
+                   r"\b(file|records?|office|clerical|billing) clerk\b",
+                   r"\bclerical\b", r"\bback.?office\b",
+                   r"\b(data )?annotat(or|ion)\b",
+                   r"\btranscription(ist)?\b",
+                   r"\bdata processing\b", r"\brecords (officer|management)\b",
+                   r"\boffice (assistant|administrator)\b",
+                   r"\b(office|business|admin(istrative)?) operations\b",
+                   r"\boperations (assistant|associate|clerk)\b",
+                   # Bare coordinator pulled "HR Coordinator", "Sales
+                   # Operations Coordinator" and "Sales Management
+                   # Coordinator" into a clerical profile - other
+                   # professions entirely. They then rendered under "Came
+                   # close" with "Centres on work outside your field"
+                   # printed beside them. Same fault as bare operations.
+                   r"\b(office|admin(istrative)?|data|records?|billing|"
+                   r"scheduling|clerical|executive) coordinator\b"],
+        "skills": ["excel", "google workspace", "google sheets", "google docs",
+                   "google forms", "calendar management",
+                   "data entry", "data annotation", "transcription",
+                   "recordkeeping", "record keeping", "data organization",
+                   "scheduling", "travel arrangements", "filing",
+                   "microsoft office", "microsoft word", "spreadsheets",
+                   "notion", "asana", "trello", "slack"],
     },
     "hr": {
         "titles": [r"\brecruit(er|ment)\b", r"\bhuman resources\b", r"\bhr\b",
@@ -427,9 +475,10 @@ def parse_profile(text, user_id="anonymous", overrides=None):
     level = find_level(text, years)
     country = find_country(text)
 
-    patterns = []
+    patterns, fam_skills = [], set()
     for fam in families:
         patterns += ROLE_CATALOGUE[fam]["titles"]
+        fam_skills |= set(ROLE_CATALOGUE[fam]["skills"])
 
     # Three overlapping skills is the right bar for a rich resume and far too
     # high for a sparse one, where it would block everything.
@@ -438,10 +487,14 @@ def parse_profile(text, user_id="anonymous", overrides=None):
     profile = Profile(
         user_id=user_id,
         role_families=sorted(set(patterns)),
+        family_skills=sorted(fam_skills),
         strong_skills=skills,
         adjacent_hints=[],
         min_skill_hits=overrides.get("min_skill_hits", min_hits),
-        years_experience=overrides.get("years_experience", years or 0),
+        # None, not 0. "Cannot determine" is not "fresh out of school": the
+        # 0 gated an 11-year professional out of every posting asking for
+        # experience at all.
+        years_experience=overrides.get("years_experience", years),
         level=overrides.get("level", level),
         home_country=overrides.get("home_country", country),
         authorized_in=overrides.get(
@@ -478,6 +531,7 @@ def profile_to_dict(p):
         "home_country": p.home_country, "authorized_in": p.authorized_in,
         "sponsorship_targets": p.sponsorship_targets,
         "remote_only": p.remote_only, "wants_local_onsite": p.wants_local_onsite,
+        "family_skills": p.family_skills,
         "has_clearance": p.has_clearance, "utc_offset": p.utc_offset,
         "min_score": p.min_score, "strong_margin": p.strong_margin,
     }

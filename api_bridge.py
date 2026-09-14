@@ -119,99 +119,21 @@ def cmd_deliver(user_id):
     if not row:
         conn.close()
         out({"ok": False, "error": "no such user"})
-    ent = db.active_entitlement(conn, user_id)
-    res = run_delivery.deliver_one(conn, row["id"], row["email"],
-                                   dict(ent) if ent else None, dry=False)
+    res = run_delivery.deliver_one(conn, row["id"], row["email"], dry=False)
     conn.close()
     if "error" in res:
         out({"ok": False, "error": res["error"]})
     out({"ok": True, "result": res})
 
 
-def cmd_trial(path, filename):
-    """Score a resume for somebody with no account, and return almost nothing.
-
-    The free trial shows exactly one job. The rest are *withheld at this
-    layer*, not hidden in the browser: the locked entries carry no title, no
-    company, no URL and no score - only randomised bar widths so the blurred
-    cards have something to draw. A CSS blur is undone by anyone who opens
-    devtools, so the only way "unrecoverable" is true is if the data never
-    leaves the server.
-
-    Writes nothing. No user, no profile row, no sent_jobs.
-    """
-    import random
-    import matching as M
-    from delivery import POOL_DAYS, _rows_for, _days_ago
-
-    text = R.extract_text(path, filename)
-    if text.startswith("__PARSE_ERROR__"):
-        out({"ok": False, "error": "Could not read that file. "
-                                   "PDF, DOCX and TXT are supported."})
-    profile, diag = R.parse_profile(text)
-    if diag["thin"]:
-        out({"ok": False, "thin": True,
-             "error": "We could only read %d characters from that file. If it "
-                      "is a scanned PDF, export a text version and try again."
-                      % diag["text_chars"]})
-
-    conn = db.init()
-    rows = _rows_for(conn, since=_days_ago(POOL_DAYS))
-    conn.close()
-
-    scored = M.score_many(rows, profile)
-    matches = [m for m in scored if m.is_match]
-    near = [m for m in scored if not m.is_match and m.showable]
-
-    if not matches:
-        out({"ok": True, "empty": True,
-             "summary": {"matches": 0, "near_misses": len(near),
-                         "pool": len(rows), "scored": len(scored),
-                         "skills": len(profile.strong_skills),
-                         "years": profile.years_experience,
-                         "level": profile.level,
-                         "families": diag["families"],
-                         "top_skills": diag["top_skills"][:8]}})
-
-    best = matches[0]
-    j = best.job
-    d = summarise(j.get("description"), j.get("salary"))
-    visible = {"title": j["title"], "company": j["company"],
-               "location": j["location"], "url": j["url"],
-               "source": j["source"], "score": best.score,
-               "reasons": best.reasons[:3],
-               "salary": d["salary"], "salary_known": d["salary_known"],
-               "summary": d["summary"],
-               "responsibilities": d["responsibilities"],
-               "requirements": d["requirements"]}
-
-    # Bar widths only. Deliberately random rather than derived from the real
-    # rows, so nothing about the withheld jobs can be inferred from them.
-    locked_count = len(matches) - 1
-    locked = [{"bars": [round(random.uniform(0.45, 0.95), 2),
-                        round(random.uniform(0.25, 0.6), 2)]}
-              for _ in range(min(locked_count, 12))]
-
-    out({"ok": True,
-         "visible": visible,
-         "locked": locked,
-         "locked_total": locked_count,
-         "summary": {"matches": len(matches), "near_misses": len(near),
-                     "pool": len(rows), "scored": len(scored),
-                     "skills": len(profile.strong_skills),
-                     "years": profile.years_experience,
-                     "level": profile.level,
-                     "families": diag["families"],
-                     "top_skills": diag["top_skills"][:8]}})
-
-
 def cmd_stats():
     conn = db.init()
-    pool = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
-    fresh = conn.execute(
+    jc = db.jobs_conn()
+    pool = jc.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
+    fresh = jc.execute(
         "SELECT COUNT(*) c FROM jobs WHERE first_seen >= datetime('now','-3 days')"
     ).fetchone()["c"]
-    srcs = conn.execute("SELECT COUNT(DISTINCT source) c FROM jobs").fetchone()["c"]
+    srcs = jc.execute("SELECT COUNT(DISTINCT source) c FROM jobs").fetchone()["c"]
     users = conn.execute("SELECT COUNT(*) c FROM users").fetchone()["c"]
     conn.close()
     out({"ok": True, "pool": pool, "fresh_3d": fresh, "sources": srcs,
@@ -230,8 +152,6 @@ def run(argv):
         cmd, rest = argv[0], argv[1:]
         if cmd == "parse":
             cmd_parse(rest[0], rest[1] if len(rest) > 1 else rest[0])
-        elif cmd == "trial":
-            cmd_trial(rest[0], rest[1] if len(rest) > 1 else rest[0])
         elif cmd == "profile":
             cmd_profile(rest[0])
         elif cmd == "preview":

@@ -73,7 +73,7 @@ section("the generated D1 migration matches db.py")
 stmts = d1._split(db.SCHEMA.replace("PRAGMA journal_mode=WAL;\n", ""))
 tables = [s for s in stmts if s.upper().startswith("CREATE TABLE")]
 indexes = [s for s in stmts if s.upper().startswith("CREATE INDEX")]
-check("every table is one statement", len(tables), 8)
+check("every table is one statement", len(tables), 10)
 check("no statement lost its trailing clause",
       all(s.count("(") == s.count(")") for s in stmts), True)
 check("indexes survive the split", len(indexes) >= 5, True)
@@ -84,11 +84,22 @@ if os.path.exists(mig):
     sql = io.open(mig, encoding="utf-8").read()
     # The migration is generated from SCHEMA; if someone edits one and not the
     # other, the tables stop matching and D1 silently lacks a column.
-    for t in ("jobs", "users", "profiles", "entitlements", "sent_jobs",
+    for t in ("jobs", "users", "profiles", "sent_jobs",
               "deliveries", "trial_runs", "sessions"):
         check("migration creates %s" % t,
               ("CREATE TABLE IF NOT EXISTS %s" % t) in sql, True)
     check("migration keeps google_sub", "google_sub" in sql, True)
+    # Credits arrived as a later migration on a live database, so they are
+    # checked there rather than in the generated 0001.
+    credits_sql = io.open(os.path.join(os.path.dirname(mig), "0003_credits.sql"),
+                          encoding="utf-8").read()
+    for t in ("payments", "runs"):
+        check("credits migration creates %s" % t,
+              ("CREATE TABLE IF NOT EXISTS %s" % t) in credits_sql, True)
+    check("credits migration drops entitlements",
+          "DROP TABLE IF EXISTS entitlements" in credits_sql, True)
+    check("every account starts with one credit",
+          "credits INTEGER NOT NULL DEFAULT 1" in credits_sql, True)
     check("migration drops the WAL pragma", "journal_mode" not in sql, True)
 else:
     FAIL.append("web/migrations/0001_init.sql is missing - run npm run migration:gen")

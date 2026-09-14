@@ -196,6 +196,7 @@ export default function AuthCard({
     if (m === mode || busy) return;
     setMode(m);
     setErr("");
+    setPending(false); // the code screen belongs to sign-up, not to sign-in
     // The URL follows the card so a reload, a back button or a shared link all
     // land on the face the person was actually looking at. In a dialog it does
     // not: the address bar belongs to the page underneath.
@@ -211,26 +212,75 @@ export default function AuthCard({
     );
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  // Password sign-up is two steps: the form emails a code, and the account is
+  // created when the code comes back. `pending` is the second step on screen.
+  const [pending, setPending] = useState(false);
+  const [code, setCode] = useState("");
+  const [note, setNote] = useState("");
+
+  /** One POST for every step. Null means the error is already on screen. */
+  async function post(url: string, payload: object) {
     setErr("");
     setBusy(true);
-    const r = await fetch(creating ? "/api/auth/signup" : "/api/auth/login", {
+    // fetch rejects outright when the server is unreachable; without this the
+    // button stays spinning and Next paints its error overlay.
+    const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        creating ? { email, password } : { email, password, next }
-      ),
-    });
+      body: JSON.stringify(payload),
+    }).catch(() => null);
+    if (!r) {
+      setBusy(false);
+      setErr("Couldn't reach the server. Check your connection and try again.");
+      return null;
+    }
     const j = (await r.json().catch(() => ({}))) as any;
     if (!r.ok) {
       setBusy(false);
-      return setErr(j.error || "Something went wrong.");
+      setErr(j.error || "Something went wrong.");
+      return null;
     }
+    return j;
+  }
+
+  function go(j: any, fallback: string) {
     // Deliberately leaving `busy` set: the next page is a server render and
     // takes a beat, and a button snapping back reads as a failure.
-    router.push(j.redirect || (creating ? "/upload" : "/dashboard"));
+    router.push(j.redirect || fallback);
     router.refresh();
+  }
+
+  function awaitCode(sentence: string) {
+    setBusy(false);
+    setCode("");
+    setNote(`${sentence} ${email}. It expires in 10 minutes.`);
+    setPending(true);
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const j = creating
+      ? await post("/api/auth/signup", { email, password })
+      : await post("/api/auth/login", { email, password, next });
+    if (!j) return;
+    if (j.verify) return awaitCode("We sent a 6-digit code to");
+    go(j, creating ? "/upload" : "/dashboard");
+  }
+
+  async function verify(e: React.FormEvent) {
+    e.preventDefault();
+    const j = await post("/api/auth/signup/verify", { email, code });
+    if (j) go(j, "/upload");
+  }
+
+  async function resend() {
+    const j = await post("/api/auth/signup", { email, password });
+    if (j) awaitCode("We sent a new code to");
+  }
+
+  function changeEmail() {
+    setPending(false);
+    setErr("");
   }
 
   const googleLabel = creating ? "Sign up with Google" : "Sign in with Google";
@@ -343,10 +393,54 @@ export default function AuthCard({
           </button>
         </div>
 
-        <h1 className={H1}>{creating ? "Create an account" : "Welcome back"}</h1>
+        <h1 className={H1}>
+          {pending ? "Check your email" : creating ? "Create an account" : "Welcome back"}
+        </h1>
 
         {err && <div className={ALERT}>{err}</div>}
 
+        {pending ? (
+          <form onSubmit={verify}>
+            <p className={`${HINT} mb-3`}>{note}</p>
+            <div className={FIELD}>
+              <label htmlFor="code">Code</label>
+              <input
+                id="code"
+                value={code}
+                required
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="\d{6}"
+                maxLength={6}
+                placeholder="123456"
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                className="px-[13px] py-[11px] sq2:py-[9px] sq2:px-3 text-center
+                           font-extrabold tracking-[0.35em]"
+              />
+            </div>
+            <button
+              className="btn w-full text-center sq3:px-[18px] sq3:py-2 sq3:text-sm
+                         sq4:px-4 sq4:py-[7px]"
+              type="submit"
+              disabled={busy}
+            >
+              {busy && <span className={SPINNER} />}
+              {busy ? "Checking…" : "Create account"}
+            </button>
+            <p className={`${HINT} mt-[11px] text-center`}>
+              Nothing arrived?{" "}
+              <button type="button" className={`${LINK_BTN} font-extrabold`} onClick={resend} disabled={busy}>
+                Send a new code
+              </button>
+              {" · "}
+              <button type="button" className={`${LINK_BTN} font-extrabold`} onClick={changeEmail} disabled={busy}>
+                Use a different email
+              </button>
+            </p>
+          </form>
+        ) : (
+        <>
         <form onSubmit={submit}>
           <div className={FIELD}>
             <label htmlFor="email">Email</label>
@@ -492,6 +586,8 @@ export default function AuthCard({
             {creating ? "Sign in" : "Get started"}
           </button>
         </p>
+        </>
+        )}
       </div>
     </div>
 

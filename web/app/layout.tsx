@@ -8,9 +8,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "TheJobStash — jobs that actually match your resume",
   description:
-    "Upload a resume once. Every morning we score thousands of live postings " +
-    "against it and email you the handful worth your time — plus the ones " +
-    "that came close, and exactly why they didn't.",
+    "Upload your resume. Each run sweeps the job boards, scores thousands of " +
+    "live postings against it and hands you the handful worth your time, plus " +
+    "the ones that came close, and exactly why they didn't.",
 };
 
 export default async function RootLayout({

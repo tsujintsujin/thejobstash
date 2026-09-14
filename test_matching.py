@@ -4,7 +4,7 @@ Exercises matching.py. Run: python test_matching.py
 
 Reads JobHunt/ (profile.py, jobs.db) but never writes to it.
 """
-import os, sys, sqlite3
+import dataclasses, os, sys, sqlite3
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 JOBHUNT = r"D:\AIO Freelance\JobHunt"
@@ -133,10 +133,18 @@ cases = [
          "remote worldwide, react only, plus graphql and kubernetes"),
      "near_miss", ["thin_skills"]),
 
+    # Changed deliberately 2026-09-12. Nothing on this resume overlaps the
+    # posting at all, so it is now "off_field" rather than "thin_skills", and
+    # off_field is a veto: the job is hidden instead of printed under "Came
+    # close". The old behaviour put roles with zero evidence of fit in front
+    # of the reader - an RPA developer role reached a clerical profile on the
+    # word "excel", and an HR Coordinator reached it while the digest printed
+    # "Centres on work outside your field" beside it. "Came close" has to mean
+    # "you almost qualify" or the section is worthless.
     ("role centres on tech never shipped",
      job("Java Developer", "Worldwide",
          "remote worldwide java spring boot microservices"),
-     "near_miss", ["skill_gap", "thin_skills"]),
+     "near_miss", ["off_field", "skill_gap"]),
 
     ("US-authorisation wall",
      job("Frontend Developer", "Remote (US)",
@@ -185,6 +193,22 @@ for label, j, want_kind, want_blockers in cases:
     check(label + " / blockers", m.blocker_kinds, sorted(want_blockers))
     tag = ", ".join(b.detail for b in m.blockers) or m.tier
     print("    %-38s score %3d  %s" % (label[:38], m.score, tag))
+
+# Unknown years must not be read as zero. A resume that never writes a date
+# range - most clerical and teaching ones - used to arrive here with
+# years_experience 0, which failed every "N+ years" test and gated an 11-year
+# professional out of anything asking for experience at all.
+p_unknown = dataclasses.replace(p, years_experience=None)
+# 4+, not 8+: detect_level reads 8 years as a lead role, which is a separate
+# and legitimate gate. This isolates the years test.
+m_unknown = M.score(
+    job("Frontend Developer", "Worldwide",
+        "remote worldwide. react typescript next.js. "
+        "4+ years of professional experience required"), p_unknown)
+check("unknown years does not gate / blockers", m_unknown.blocker_kinds, [])
+check("unknown years does not gate / kind", m_unknown.is_match, True)
+print("    %-38s score %3d  %s" % ("unknown years, 4+ wanted",
+                                   m_unknown.score, m_unknown.tier))
 
 print()
 print("=" * 68)

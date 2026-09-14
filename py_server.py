@@ -24,15 +24,15 @@ Endpoints (all but /healthz require the bearer token):
     GET  /healthz                      -> {"ok": true}
     GET  /stats                        -> pool counts
     POST /parse    ?name=<filename>    body = the raw resume bytes
-    POST /trial    ?name=<filename>    body = the raw resume bytes
     POST /preview  body {"user_id": …}
-    POST /deliver  body {"user_id": …}
+    POST /run      body {"user_id": …, "run_id": …}   hands a run to n8n
 """
-import os, sys, json, secrets, tempfile, traceback
+import os, re, sys, json, secrets, tempfile, traceback, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 import api_bridge
 
 PORT = int(os.environ.get("JOBSTASH_PY_PORT", "3300"))
@@ -42,6 +42,13 @@ TOKEN = os.environ.get("JOBSTASH_PY_TOKEN", "")
 # the caller having already checked anything.
 MAX_BYTES = 8 * 1024 * 1024
 ALLOWED_EXT = (".pdf", ".docx", ".txt", ".md")
+
+# n8n's production webhook for the run workflow (n8n/build_saas_workflow.py).
+# Localhost only: n8n is never exposed through the tunnel.
+N8N_RUN_URL = os.environ.get("JOBSTASH_N8N_RUN_URL",
+                             "http://127.0.0.1:5678/webhook/jobstash-run")
+USER_ID = re.compile(r"^usr_[0-9a-f]{16}$")
+RUN_ID = re.compile(r"^run_[0-9a-f]{16}$")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -95,7 +102,79 @@ class Handler(BaseHTTPRequestHandler):
             return self._send({"ok": False, "error": "unauthorised"}, 401)
         if route == "/stats":
             return self._dispatch(["stats"])
+        if route == "/digest":
+            return self._serve_digest(urlparse(self.path))
         self._send({"ok": False, "error": "not found"}, 404)
+
+    def _serve_digest(self, parsed):
+        """Hand back a rendered digest that lives on this machine.
+
+        render.py writes the HTML and PDF to outbox/ here, and the Worker has
+        no filesystem, so the dashboard's View and PDF buttons answered "that
+        file was never uploaded" for every digest ever produced. R2 would fix
+        it too but needs a subscription; this needs nothing, because the
+        tunnel that already carries the scorer can carry the file.
+
+        The caller is the Worker, which has already checked that the signed-in
+        user owns the delivery row. This only has to refuse to read anything
+        outside outbox/, so the name is reduced to a basename and the resolved
+        path is confirmed to still sit inside that directory - a query string
+        arriving from the network must never be able to name
+        ../../.env.cloudflare.
+        """
+        want = (parse_qs(parsed.query).get("name") or [""])[0]
+        name = os.path.basename(want.replace("\\", "/"))
+        if not name or not name.lower().endswith((".html", ".pdf")):
+            return self._send({"ok": False, "error": "bad name"}, 400)
+
+        outbox = os.path.join(HERE, "outbox")
+        path = os.path.realpath(os.path.join(outbox, name))
+        if not path.startswith(os.path.realpath(outbox) + os.sep):
+            return self._send({"ok": False, "error": "refused"}, 403)
+        if not os.path.isfile(path):
+            return self._send({"ok": False, "error": "not found"}, 404)
+
+        body = open(path, "rb").read()
+        ctype = ("application/pdf" if name.lower().endswith(".pdf")
+                 else "text/html; charset=utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _start_run(self):
+        """Hand one run to n8n, which sweeps the boards if the pool is stale,
+        scores and renders. Returns as soon as n8n has accepted it: a stale
+        sweep runs longer than Cloudflare holds this request open, so the site
+        polls the runs row instead of waiting here.
+
+        Both ids end up in a shell command inside n8n, so they are held to the
+        exact shape newId() mints before they go anywhere.
+        """
+        raw = self._body(limit=64 * 1024)
+        try:
+            body = json.loads(raw or b"{}") or {}
+        except ValueError:
+            return self._send({"ok": False, "error": "bad JSON"}, 400)
+        user_id, run_id = body.get("user_id"), body.get("run_id")
+        if not (isinstance(user_id, str) and USER_ID.match(user_id)
+                and isinstance(run_id, str) and RUN_ID.match(run_id)):
+            return self._send({"ok": False, "error": "bad ids"}, 400)
+
+        req = urllib.request.Request(
+            N8N_RUN_URL, method="POST",
+            data=json.dumps({"user_id": user_id, "run_id": run_id}).encode(),
+            headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as res:
+                res.read()
+        except Exception as e:                  # noqa: BLE001
+            sys.stdout.write("[py] n8n did not take run %s: %s\n" % (run_id, e))
+            sys.stdout.flush()
+            return self._send({"ok": False, "error":
+                               "The run queue is offline right now."})
+        self._send({"ok": True})
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -103,10 +182,13 @@ class Handler(BaseHTTPRequestHandler):
         if not self._authed():
             return self._send({"ok": False, "error": "unauthorised"}, 401)
 
-        if route in ("/parse", "/trial"):
-            return self._file_command(route.lstrip("/"), parsed)
+        if route == "/parse":
+            return self._file_command("parse", parsed)
 
-        if route in ("/preview", "/deliver"):
+        if route == "/run":
+            return self._start_run()
+
+        if route == "/preview":
             raw = self._body(limit=64 * 1024)
             if raw is None:
                 return self._send({"ok": False, "error": "bad request"}, 400)
@@ -122,7 +204,7 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- commands ----------------------------------------------------------
     def _file_command(self, cmd, parsed):
-        """`parse` and `trial` both take a resume file and nothing else."""
+        """`parse` takes a resume file and nothing else."""
         name = (parse_qs(parsed.query).get("name") or ["resume.pdf"])[0]
         # The filename only ever chooses a parser and is echoed nowhere, but it
         # arrives from the network, so strip any path from it rather than trust

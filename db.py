@@ -18,16 +18,72 @@ The four tables are the ones the architecture discussion settled on:
 
   jobs          the shared pool, scraped once, read by every user
   profiles      one per user - the thing JobHunt/profile.py hard-codes
-  entitlements  a paid (or, for now, free) window of daily deliveries
+  payments      PayMongo credit-pack checkouts (credits live on users)
   sent_jobs     what each user has already been shown, so day 4 never repeats
                 day 1. This is the only piece JobHunt has no equivalent of.
 """
-import os, sqlite3, json, hashlib, secrets, datetime
+import os, sqlite3, json, hashlib, secrets, datetime, io, re, sys
 
 import d1
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("JOBSTASH_DB", os.path.join(HERE, "jobstash.db"))
+
+
+def load_env(path=None):
+    """Put .env.cloudflare into os.environ, unless the caller already set it.
+
+    Explicit environment wins, so JOBSTASH_USE_D1=0 and the tests still work.
+    """
+    path = path or os.path.join(HERE, ".env.cloudflare")
+    if not os.path.exists(path):
+        return False
+    with io.open(path, encoding="utf-8") as fh:
+        for k, v in re.findall(r"^([A-Z0-9_]+)=(.*)$", fh.read(), re.M):
+            if v and k not in os.environ:
+                os.environ[k] = v.strip()
+    return True
+
+
+def jobs_conn(path=None):
+    """The shared job pool. ALWAYS local, never D1.
+
+    The pool is read in full by matching.py and written in full by ingest.py,
+    and nothing else reads a job row - the site only ever wanted three counts
+    from it (see pool_stats above). Keeping it in D1 meant this machine pulled
+    a few megabytes back down through the Worker to score one resume, which is
+    both the slow part of every scan and what exhausted the Worker's CPU
+    budget on 2026-09-12. Jobs belong next to the Python that uses them.
+
+    Accounts - users, sessions, profiles, credits, deliveries - stay in
+    D1 via init(), because the site genuinely needs them.
+    """
+    return init(path or DB_PATH)
+
+
+def use_live_store():
+    """Called by the entry points that must reach the deployed pool.
+
+    d1.configured() reads os.environ, and nothing was putting .env.cloudflare
+    there for a process the *scheduler* started. An n8n executeCommand node
+    runs a bare `python ingest.py --json`, inheriting none of it, so
+    d1.configured() was False and init() opened the local sqlite file. Nothing
+    raised: the scrape succeeded, the workflow reported success, and the live
+    pool never moved - a full nightly scrape written into a database the site
+    does not read.
+
+    Deliberately NOT inside init(): D1 must stay opt-in, or JobHunt tooling and
+    every test would start needing a network and a token. This is the opt-in.
+    """
+    had_env = load_env()
+    if d1.configured():
+        return True
+    if had_env and os.environ.get("JOBSTASH_USE_D1", "1") != "0":
+        sys.stderr.write(
+            "[db] WARNING: .env.cloudflare is present but D1 is not "
+            "configured - writing to %s, which the live site does not "
+            "read.\n" % DB_PATH)
+    return False
 
 
 def now_iso():
@@ -46,7 +102,7 @@ def new_id(prefix=""):
 SCHEMA = """
 PRAGMA journal_mode=WAL;
 
--- The shared pool. Scraped once per day regardless of how many users exist;
+-- The shared pool. Scraped once and shared, regardless of how many users exist;
 -- this is what makes the marginal cost of user 500 the same as user 1.
 CREATE TABLE IF NOT EXISTS jobs (
     fp            TEXT PRIMARY KEY,     -- normalised company+title hash
@@ -75,6 +131,9 @@ CREATE TABLE IF NOT EXISTS users (
     -- theirs, and matching on an address that moved would hand one person's
     -- stash to whoever inherited it.
     google_sub    TEXT UNIQUE,
+    -- One run of a resume each. The default is the free credit every account
+    -- starts with, so no signup path has to grant it.
+    credits       INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL
 );
 
@@ -87,21 +146,35 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at    TEXT NOT NULL
 );
 
--- A window of daily deliveries. Payment is switched off, so these are granted
--- free at signup; when Stripe lands it writes exactly the same row.
-CREATE TABLE IF NOT EXISTS entitlements (
-    id            TEXT PRIMARY KEY,
+-- One PayMongo checkout. Credits are added only when PayMongo's own record of
+-- the intent says paid; the pending -> paid flip makes that count once.
+CREATE TABLE IF NOT EXISTS payments (
+    id            TEXT PRIMARY KEY,     -- pay_<hex>, our reference
     user_id       TEXT NOT NULL REFERENCES users(id),
-    plan          TEXT NOT NULL,        -- one_time | three_day | seven_day
-    starts_on     TEXT NOT NULL,        -- YYYY-MM-DD inclusive
-    ends_on       TEXT NOT NULL,        -- YYYY-MM-DD inclusive
-    deliveries_used INTEGER NOT NULL DEFAULT 0,
-    status        TEXT NOT NULL DEFAULT 'active',
-    created_at    TEXT NOT NULL
+    pack          TEXT NOT NULL,        -- id from web/lib/packs.ts
+    credits       INTEGER NOT NULL,
+    amount        INTEGER NOT NULL,     -- centavos actually charged
+    checkout_id   TEXT UNIQUE,          -- PayMongo payment intent, pi_...
+    status        TEXT NOT NULL DEFAULT 'pending',  -- pending | paid
+    created_at    TEXT NOT NULL,
+    paid_at       TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_ent_user ON entitlements(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_pay_user ON payments(user_id, created_at);
 
--- Every job ever shown to a user, so a seven-day plan never repeats itself.
+-- One run of one resume. The credit is taken when the row is created and
+-- handed back if the run fails.
+CREATE TABLE IF NOT EXISTS runs (
+    id            TEXT PRIMARY KEY,     -- run_<hex>
+    user_id       TEXT NOT NULL REFERENCES users(id),
+    status        TEXT NOT NULL DEFAULT 'queued',   -- queued | running | done | failed
+    delivery_id   TEXT,
+    error         TEXT,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id, created_at);
+
+-- Every job ever shown to a user, so a later run never repeats an earlier one.
 -- The dedupe that JobHunt does globally with its `reported` flag, per-user.
 CREATE TABLE IF NOT EXISTS sent_jobs (
     user_id       TEXT NOT NULL,
@@ -112,11 +185,10 @@ CREATE TABLE IF NOT EXISTS sent_jobs (
 );
 
 -- One digest. Rendered files live on disk; this is the index the dashboard
--- reads, and the record that a paid day was actually delivered.
+-- reads, and the record that a paid run was actually delivered.
 CREATE TABLE IF NOT EXISTS deliveries (
     id            TEXT PRIMARY KEY,
     user_id       TEXT NOT NULL REFERENCES users(id),
-    entitlement_id TEXT,
     day           TEXT NOT NULL,        -- YYYY-MM-DD
     matches       INTEGER NOT NULL DEFAULT 0,
     near_misses   INTEGER NOT NULL DEFAULT 0,
@@ -144,6 +216,32 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_id       TEXT NOT NULL REFERENCES users(id),
     created_at    TEXT NOT NULL,
     expires_at    TEXT NOT NULL
+);
+
+-- Password sign-up emails a code before any account exists; a correct code
+-- creates the account from this row and deletes it. Only a hash of the code
+-- is stored, and attempts caps the guesses one code can take. (web migration 0004)
+CREATE TABLE IF NOT EXISTS signup_codes (
+    email         TEXT PRIMARY KEY,
+    password_hash TEXT NOT NULL,
+    code_hash     TEXT NOT NULL,
+    attempts      INTEGER NOT NULL DEFAULT 0,
+    expires_at    TEXT NOT NULL,
+    created_at    TEXT NOT NULL
+);
+
+-- Three numbers the home page shows, written by ingest.py once a day.
+-- The page used to compute these with three aggregates over every row in
+-- jobs, on every render. That is the most expensive thing on the busiest
+-- page, and it is why the pool had to live on Cloudflare at all - the site
+-- wanted counts, so the whole table went up. One row of counts costs nothing
+-- and lets the pool live where the Python that reads it lives.
+CREATE TABLE IF NOT EXISTS pool_stats (
+    id            INTEGER PRIMARY KEY,      -- always 1
+    pool          INTEGER NOT NULL,
+    fresh         INTEGER NOT NULL,
+    sources       INTEGER NOT NULL,
+    updated_at    TEXT NOT NULL
 );
 """
 
@@ -180,6 +278,10 @@ def init(path=None):
     # migrates a database it does not own, and a half-applied ALTER issued
     # from a home connection that dropped mid-flight is exactly the failure
     # that would be unrecoverable.
+    # D1 stays opt-in: init() never loads .env.cloudflare itself. Production
+    # entry points call use_live_store() first; tests and JobHunt tooling get
+    # the local file without needing a network or a token.
+    # test_cloudflare.py asserts this and is right to.
     if path is None and d1.configured():
         return d1.connect()
 
@@ -258,14 +360,6 @@ def get_profile(conn, user_id):
     r = conn.execute("SELECT profile_json FROM profiles WHERE user_id=?",
                      (user_id,)).fetchone()
     return json.loads(r["profile_json"]) if r else None
-
-
-def active_entitlement(conn, user_id, day=None):
-    day = day or today_iso()
-    return conn.execute(
-        "SELECT * FROM entitlements WHERE user_id=? AND status='active' "
-        "AND starts_on<=? AND ends_on>=? ORDER BY created_at DESC LIMIT 1",
-        (user_id, day, day)).fetchone()
 
 
 def already_sent(conn, user_id):

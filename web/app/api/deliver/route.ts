@@ -1,16 +1,22 @@
-import { NextRequest, NextResponse } from "next/server";
-import { currentUser, } from "@/lib/session";
-import { activeEntitlement, profileFor } from "@/lib/db";
-import { pyUser } from "@/lib/py";
+import { NextResponse } from "next/server";
+import { currentUser } from "@/lib/session";
+import { failRun, profileFor, startRun } from "@/lib/db";
+import { pyRun } from "@/lib/py";
 
 /**
- * Generate today's digest on demand.
+ * Start one run of this account's resume. Costs one credit.
  *
- * ?preview=1 scores without consuming anything, so the dashboard can show the
- * list without burning the jobs it displays. Without it, this is the real
- * thing: it writes sent_jobs, records a delivery and posts the email.
+ * The credit is taken here, before anything runs, so two clicks cannot spend
+ * one credit twice. The run itself - sweep the boards if the pool is more than
+ * 30 minutes old, score, render - happens in n8n on the scorer machine and can
+ * take longer than Cloudflare holds a request open. So this answers with a run
+ * id at once, and the dashboard polls /api/runs/<id>.
+ *
+ * If the scorer machine or n8n cannot take the run, the credit goes straight
+ * back. Nothing in the digest itself is withheld: a run produces the whole
+ * stash, unlocked.
  */
-export async function POST(req: NextRequest) {
+export async function POST() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
@@ -21,20 +27,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const preview = req.nextUrl.searchParams.get("preview") === "1";
-  if (!preview && !(await activeEntitlement(user.id))) {
+  const runId = await startRun(user.id);
+  if (!runId) {
     return NextResponse.json(
-      { error: "Your plan has run out. Start another to keep getting digests." },
+      { error: "You're out of credits. Buy a pack to run your resume again." },
       { status: 402 }
     );
   }
 
-  const res = await pyUser(preview ? "preview" : "deliver", user.id);
+  const res = await pyRun(user.id, runId);
   if (!res.ok) {
+    const why = res.error || "The scorer is offline.";
+    await failRun(runId, why);
     return NextResponse.json(
-      { error: res.error || "Scoring failed." },
-      { status: 500 }
+      { error: `${why} Your credit has been returned.` },
+      { status: 503 }
     );
   }
-  return NextResponse.json(res);
+  return NextResponse.json({ ok: true, run_id: runId });
 }

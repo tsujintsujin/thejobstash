@@ -49,7 +49,7 @@ c=$(code -X POST "$BASE/api/deliver")
 # --- signup ---------------------------------------------------------------
 r=$(curl -s -b "$JAR" -c "$JAR" -X POST "$BASE/api/auth/signup" \
       -H 'Content-Type: application/json' \
-      -d "{\"email\":\"$EMAIL\",\"password\":\"testing1234\",\"plan\":\"seven_day\"}")
+      -d "{\"email\":\"$EMAIL\",\"password\":\"testing1234\"}")
 echo "$r" | grep -q '"ok":true' && ok "signup" || bad "signup" "$r"
 
 c=$(code "$BASE/dashboard")

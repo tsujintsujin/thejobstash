@@ -1,181 +1,192 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import JobCard, { type Job } from "../JobCard";
-import {
-  ALERT,
-  ALERT_INFO,
-  ALERT_OK,
-  G4,
-  SECHEAD_NOTE,
-  STAT,
-  STAT_L,
-  STAT_N,
-} from "../ui";
+import { ALERT, SPINNER } from "../ui";
 
-type Digest = {
-  sections: Record<string, Job[]>;
-  summary: {
-    matches: number;
-    near_misses: number;
-    pool_size: number;
-    scored: number;
-    thin: boolean;
-    first_ever: boolean;
-    backfilled: number;
-    reserve_left: number;
-    blocker_copy: string[];
-  };
-};
+/**
+ * The one control on the dashboard: spend a credit to run this account's
+ * resume and produce a digest.
+ *
+ * It renders NO job list. HANDOFF.md line 32 settled the scope of this page as
+ * "Account only - resume, past digests", explicitly "Not a job browser". The
+ * jobs live in the rendered digest, and the rendered digest has exactly one
+ * way in: /api/download/<id>, the same route the Past digests rows use for
+ * View and PDF. So a run ends in a modal that hands over that link rather than
+ * re-implementing the list in React.
+ *
+ * A run can take minutes when the pool is stale and every board is swept
+ * first, which outlasts any request Cloudflare will hold open. So /api/deliver
+ * only starts the run, and this polls /api/runs/<id> until it lands.
+ */
+type Ready = { id: string; pdf: boolean; matches: number; near: number };
 
-/* The quality ladder, and the one place in the product where colour is doing
-   real work. It descends by value rather than rotating through hues: the
-   positive accent, then two neutrals of decreasing brightness, then the
-   attention accent at the bottom.
-
-   The old build ran sky → peach → paper → coral, which put the loudest colour
-   it had on the WORST tier and used the primary-button colour to do it. */
-const SECTIONS: [string, string, string, string][] = [
-  ["strong", "Strong matches", "bg-jade", "Worth applying to today."],
-  ["worth_a_look", "Worth a look", "bg-paper", "Solid fits with a caveat or two."],
-  ["stretch", "Stretch", "bg-bone", "Below your usual bar — shown because the day was quiet."],
-  ["near_miss", "Came close", "bg-sun", "Matched your work, blocked by one thing."],
-];
+const POLL_MS = 4000;
 
 export default function DigestPanel({
   hasProfile,
-  hasPlan,
-  deliveredToday,
+  credits,
 }: {
   hasProfile: boolean;
-  hasPlan: boolean;
-  deliveredToday: boolean;
+  credits: number;
 }) {
   const router = useRouter();
-  const [digest, setDigest] = useState<Digest | null>(null);
-  const [busy, setBusy] = useState("");
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [ready, setReady] = useState<Ready | null>(null);
 
-  async function run(preview: boolean) {
+  // Escape closes, and the page behind must not scroll under the modal.
+  useEffect(() => {
+    if (!ready) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setReady(null);
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [ready]);
+
+  async function run() {
     setErr("");
-    setBusy(preview ? "preview" : "send");
-    const r = await fetch(`/api/deliver${preview ? "?preview=1" : ""}`, {
-      method: "POST",
-    });
-    const j = (await r.json()) as any;
-    setBusy("");
-    if (!r.ok) return setErr(j.error || "Something went wrong.");
-    if (preview) {
-      setDigest(j);
-    } else {
-      // A real delivery writes rows the server component renders, so the page
-      // has to re-fetch rather than patch state locally.
+    setBusy(true);
+    const r = await fetch("/api/deliver", { method: "POST" });
+    const j = (await r.json().catch(() => ({}))) as any;
+    if (!r.ok || !j.run_id) {
+      setBusy(false);
       router.refresh();
-      setDigest(null);
+      return setErr(j.error || "Something went wrong.");
+    }
+    // The credit is spent the moment the run starts, so the balance above
+    // should say so while the run works.
+    router.refresh();
+
+    for (;;) {
+      await new Promise((res) => setTimeout(res, POLL_MS));
+      const s = await fetch(`/api/runs/${j.run_id}`, { cache: "no-store" });
+      if (s.status === 401 || s.status === 404) {
+        setBusy(false);
+        return setErr("Lost track of that run. Refresh the page — it will appear under Past digests when it finishes.");
+      }
+      if (!s.ok) continue; // a blip, not an answer
+      const st = (await s.json().catch(() => ({}))) as any;
+      if (st.status === "done") {
+        setBusy(false);
+        setReady({
+          id: st.delivery_id,
+          pdf: !!st.pdf,
+          matches: st.matches ?? 0,
+          near: st.near_misses ?? 0,
+        });
+        // The delivery row is written, so the server render gains a Past
+        // digests entry with the same two buttons the modal offers.
+        return router.refresh();
+      }
+      if (st.status === "failed") {
+        setBusy(false);
+        router.refresh();
+        return setErr(st.error || "The run failed. Your credit has been returned.");
+      }
     }
   }
 
   if (!hasProfile) {
     return (
-      <div className="border-3 border-ink bg-bone text-ink p-6">
+      <div className="border-3 border-ink bg-bone text-ink p-6 mb-8">
         <p className="text-sm font-semibold">
-          Upload a resume and your matches will appear here.
+          Upload a resume and your digests will appear here.
         </p>
       </div>
     );
   }
 
+  const empty = credits < 1;
+
   return (
     <>
+      <div className="flex items-center gap-3 flex-wrap mb-5">
+        <button className="btn btn-ink" onClick={run} disabled={busy || empty}>
+          {busy && <span className={SPINNER} />}
+          {busy ? "Sweeping and scoring…" : "Run my resume · 1 credit"}
+        </button>
+        <span className="text-sm font-semibold opacity-70">
+          {busy ? (
+            "This can take a couple of minutes. You can leave — it lands under Past digests."
+          ) : empty ? (
+            <>
+              You&rsquo;re out of credits.{" "}
+              <a href="#buy" className="underline">
+                Buy a pack
+              </a>
+            </>
+          ) : (
+            "Opens your stash, and keeps a copy below"
+          )}
+        </span>
+      </div>
+
       {err && <div className={ALERT}>{err}</div>}
 
-      {digest && (
-        <>
-          <div className={`${G4} mb-5`}>
-            <div className={`${STAT} bg-paper`}>
-              <b className={STAT_N}>{digest.summary.matches}</b>
-              <span className={STAT_L}>Matches</span>
+      {ready && (
+        <div
+          className="fixed inset-0 z-[100] bg-ink/60 flex items-center
+                     justify-center p-5 animate-fade"
+          onClick={(e) => e.target === e.currentTarget && setReady(null)}
+        >
+          <div
+            className="w-full max-w-[480px] bg-paper text-ink border-3 border-ink
+                       shadow-brut-lg animate-pop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Your stash is ready"
+          >
+            <div className="bg-ink text-bone px-4 py-3 flex justify-between items-center text-sm">
+              <b>Your stash</b>
+              <button
+                className="bg-transparent border-0 text-bone text-[17px] cursor-pointer
+                           leading-none px-1 py-0.5 font-[inherit]"
+                onClick={() => setReady(null)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
             </div>
-            <div className={`${STAT} bg-paper`}>
-              <b className={STAT_N}>{digest.summary.near_misses}</b>
-              <span className={STAT_L}>Came close</span>
-            </div>
-            <div className={`${STAT} bg-paper`}>
-              <b className={STAT_N}>{digest.summary.scored.toLocaleString()}</b>
-              <span className={STAT_L}>Scored for you</span>
-            </div>
-            <div className={`${STAT} bg-paper`}>
-              <b className={STAT_N}>{digest.summary.reserve_left}</b>
-              <span className={STAT_L}>Held in reserve</span>
+
+            <div className="p-[22px] max-[560px]:p-[18px]">
+              <h2 className="text-h3 mb-2">The Job Stash is ready!</h2>
+              <p className="text-[13.5px] font-semibold opacity-75 mb-5">
+                {ready.matches} match{ready.matches === 1 ? "" : "es"} and{" "}
+                {ready.near} that came close, each with the reason it
+                didn&rsquo;t clear. Nothing is held back.
+              </p>
+
+              <div className="flex gap-2.5 flex-wrap">
+                {/* Byte-for-byte what the Past digests "View" button opens -
+                    one route, one rendering, no second list to maintain. */}
+                <a
+                  className="btn btn-ink"
+                  href={`/api/download/${ready.id}?format=html&v=${ready.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Click here to view →
+                </a>
+                {ready.pdf && (
+                  <a
+                    className="btn btn-paper"
+                    href={`/api/download/${ready.id}?v=${ready.id}`}
+                  >
+                    PDF
+                  </a>
+                )}
+              </div>
+
+              <p className="text-xs opacity-70 mt-3.5 font-semibold">
+                Also emailed to you, and kept under Past digests below.
+              </p>
             </div>
           </div>
-
-          {digest.summary.thin && (
-            <div className={ALERT_INFO}>
-              Quiet day. Rather than pad this out with roles that don&rsquo;t
-              fit, here&rsquo;s everything that genuinely did — and what came
-              close. A real delivery would add a day to your plan.
-            </div>
-          )}
-
-          {digest.summary.backfilled > 0 && (
-            <div className={ALERT_OK}>
-              {digest.summary.backfilled} of these were held back from earlier
-              sweeps so today wouldn&rsquo;t come up short.
-            </div>
-          )}
-
-          {SECTIONS.map(([key, title, colour, blurb]) => {
-            const rows = digest.sections[key] || [];
-            if (!rows.length) return null;
-            return (
-              <div key={key}>
-                <div className={`sechead ${colour}`}>
-                  <h2 className="text-xl">
-                    {title} — {rows.length}
-                  </h2>
-                  <em className={SECHEAD_NOTE}>{blurb}</em>
-                </div>
-                {rows.map((j) => (
-                  <JobCard
-                    key={j.fp}
-                    job={j}
-                    showBlockers={key === "near_miss"}
-                  />
-                ))}
-              </div>
-            );
-          })}
-
-          {digest.summary.blocker_copy.length > 0 && (
-            <div className="card bg-ink text-bone mt-6">
-              <h2 className="text-h3 mb-3">
-                What&rsquo;s standing in your way
-              </h2>
-              <ul className="list-none">
-                {digest.summary.blocker_copy.map((c) => (
-                  <li
-                    key={c}
-                    className="text-sm font-semibold py-1.5 border-b border-bone-line last:border-b-0"
-                  >
-                    {c}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {digest.summary.matches === 0 &&
-            digest.summary.near_misses === 0 && (
-              <div className="border-3 border-ink bg-bone text-ink p-6">
-                <p className="text-sm font-semibold">
-                  Nothing left in the pool you haven&rsquo;t already been shown.
-                  Tomorrow&rsquo;s sweep brings roughly a thousand new postings.
-                </p>
-              </div>
-            )}
-        </>
+        </div>
       )}
     </>
   );

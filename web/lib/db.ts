@@ -1,4 +1,5 @@
 import { env } from "./cf";
+import { FREE_CREDITS } from "./packs";
 
 /**
  * The web app and the Python worker share one Cloudflare D1 database.
@@ -99,9 +100,10 @@ export type User = {
   email: string;
   password_hash: string | null;
   google_sub?: string | null;
+  credits: number;
 };
 
-const USER_COLS = "id,email,password_hash,google_sub";
+const USER_COLS = "id,email,password_hash,google_sub,credits";
 
 export async function userByEmail(email: string) {
   return db()
@@ -114,10 +116,13 @@ export async function userById(id: string) {
   return db().prepare(`SELECT ${USER_COLS} FROM users WHERE id = ?`).bind(id).first<User>();
 }
 
-export async function createUser(email: string, password: string): Promise<User> {
+/**
+ * Takes the hash, not the password: sign-up hashes when it emails the code
+ * (lib/otp.ts) and only creates the account once that code comes back.
+ */
+export async function createUser(email: string, hash: string): Promise<User> {
   const id = newId("usr_");
   const e = email.trim().toLowerCase();
-  const hash = await hashPassword(password);
   await db()
     .prepare("INSERT INTO users (id,email,password_hash,created_at) VALUES (?,?,?,?)")
     .bind(id, e, hash, nowIso())
@@ -126,7 +131,7 @@ export async function createUser(email: string, password: string): Promise<User>
   // is what an OAuth-only account looks like - so any caller that checked
   // "does this account have a password" would have been told no about an
   // account that had just been given one.
-  return { id, email: e, password_hash: hash, google_sub: null };
+  return { id, email: e, password_hash: hash, google_sub: null, credits: FREE_CREDITS };
 }
 
 export async function userByGoogleSub(sub: string) {
@@ -151,7 +156,7 @@ export async function createOAuthUser(email: string, googleSub: string): Promise
     )
     .bind(id, e, googleSub, nowIso())
     .run();
-  return { id, email: e, password_hash: null, google_sub: googleSub };
+  return { id, email: e, password_hash: null, google_sub: googleSub, credits: FREE_CREDITS };
 }
 
 /**
@@ -168,51 +173,57 @@ export async function linkGoogleSub(userId: string, googleSub: string) {
 }
 
 /**
- * Payment is switched off, so a plan is granted on request. When Stripe lands
- * it writes exactly this row after the webhook clears - nothing downstream
- * needs to change.
+ * Take one credit and open a run, or return null when there is none to take.
+ *
+ * One transaction. The INSERT only happens if the UPDATE changed a row, and
+ * the UPDATE only changes one while credits > 0 - so two clicks racing for
+ * the last credit cannot both start a run.
  */
-const PLAN_DAYS: Record<string, number> = {
-  one_time: 1,
-  three_day: 3,
-  seven_day: 7,
-};
-
-export async function grantPlan(userId: string, plan: string) {
-  const days = PLAN_DAYS[plan] ?? 1;
-  const start = new Date();
-  const end = new Date(start.getTime() + (days - 1) * 86400000);
-  // Batched so the supersede and the insert land together. Without it a
-  // dropped connection between the two leaves an account with no active
-  // entitlement at all - having just been granted one.
-  await db().batch([
-    db()
-      .prepare("UPDATE entitlements SET status='superseded' WHERE user_id=?")
-      .bind(userId),
+export async function startRun(userId: string) {
+  const id = newId("run_");
+  const now = nowIso();
+  const [took] = await db().batch([
+    db().prepare("UPDATE users SET credits=credits-1 WHERE id=? AND credits>0").bind(userId),
     db()
       .prepare(
-        "INSERT INTO entitlements (id,user_id,plan,starts_on,ends_on," +
-          "deliveries_used,status,created_at) VALUES (?,?,?,?,?,0,'active',?)"
+        "INSERT INTO runs (id,user_id,status,created_at,updated_at) " +
+          "SELECT ?,?,'queued',?,? WHERE changes()>0"
       )
-      .bind(
-        newId("ent_"),
-        userId,
-        plan,
-        start.toISOString().slice(0, 10),
-        end.toISOString().slice(0, 10),
-        nowIso()
-      ),
+      .bind(id, userId, now, now),
+  ]);
+  return took.meta.changes ? id : null;
+}
+
+/**
+ * Fail a run and hand its credit back - once. The refund only fires while the
+ * run is still open and the same transaction closes it, so the scorer
+ * reporting a failure and a stale run being swept cannot both refund.
+ */
+export async function failRun(runId: string, error: string) {
+  await db().batch([
+    db()
+      .prepare(
+        "UPDATE users SET credits=credits+1 WHERE id=(SELECT user_id FROM runs " +
+          "WHERE id=? AND status IN ('queued','running'))"
+      )
+      .bind(runId),
+    db()
+      .prepare(
+        "UPDATE runs SET status='failed', error=?, updated_at=? " +
+          "WHERE id=? AND status IN ('queued','running')"
+      )
+      .bind(error.slice(0, 500), nowIso(), runId),
   ]);
 }
 
-export async function activeEntitlement(userId: string) {
-  const day = todayIso();
+export async function runFor(userId: string, runId: string) {
   return db()
     .prepare(
-      "SELECT * FROM entitlements WHERE user_id=? AND status='active' " +
-        "AND starts_on<=? AND ends_on>=? ORDER BY created_at DESC LIMIT 1"
+      "SELECT r.id,r.status,r.error,r.created_at,r.delivery_id," +
+        "d.matches,d.near_misses,d.pdf_path FROM runs r " +
+        "LEFT JOIN deliveries d ON d.id=r.delivery_id WHERE r.id=? AND r.user_id=?"
     )
-    .bind(userId, day, day)
+    .bind(runId, userId)
     .first<any>();
 }
 
@@ -252,18 +263,52 @@ export async function saveProfile(
 }
 
 export async function poolStats() {
-  // One round trip instead of three. Each D1 query is a network call, and
-  // this runs on the home page.
+  // One indexed row, not three aggregates over the whole pool.
+  //
+  // This used to COUNT(*), SUM(CASE...) and COUNT(DISTINCT source) across
+  // every job row on every render of the home page - the busiest page on the
+  // site and the one with the least CPU to spare. On the Workers free plan a
+  // request gets 10ms total, and on 2026-09-12 that scan is what pushed cold
+  // starts over the limit and left the home page returning 500.
+  //
+  // ingest.py writes this row once a day. The jobs table itself no longer
+  // lives here at all - it is local to the machine that scores resumes, which
+  // is the only thing that ever read a job row.
   const row = await db()
-    .prepare(
-      "SELECT COUNT(*) pool, " +
-        "SUM(CASE WHEN first_seen >= datetime('now','-3 days') THEN 1 ELSE 0 END) fresh, " +
-        "COUNT(DISTINCT source) sources FROM jobs"
-    )
+    .prepare("SELECT pool, fresh, sources FROM pool_stats WHERE id=1")
     .first<any>();
   return {
     pool: row?.pool ?? 0,
     fresh: row?.fresh ?? 0,
     sources: row?.sources ?? 0,
   };
+}
+
+/**
+ * A sliding-window attempt counter, for sign-in and sign-up.
+ *
+ * ponytail: rides on trial_runs, the free-trial table left unused when the
+ * paywall went - it is already a (caller, created_at) log with an index. Give
+ * this its own table if anything else ever needs one.
+ */
+export async function tooManyAttempts(key: string, max: number, minutes = 15) {
+  const row = await db()
+    .prepare(
+      "SELECT COUNT(*) n FROM trial_runs WHERE caller=? " +
+        "AND created_at > strftime('%Y-%m-%dT%H:%M:%SZ','now',?)"
+    )
+    .bind(key, `-${minutes} minutes`)
+    .first<{ n: number }>();
+  return (row?.n ?? 0) >= max;
+}
+
+export async function recordAttempts(...keys: string[]) {
+  const now = nowIso();
+  await db().batch(
+    keys.map((k) =>
+      db()
+        .prepare("INSERT INTO trial_runs (id,caller,created_at) VALUES (?,?,?)")
+        .bind(newId("att_"), k, now)
+    )
+  );
 }

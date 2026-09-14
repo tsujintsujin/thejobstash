@@ -34,9 +34,9 @@ def subject_for(summary):
     if summary["first_ever"]:
         return "Your first sweep: %d matches" % n
     if summary["thin"]:
-        return "Quiet day - %d match%s, and what came close" % (
+        return "A quiet run - %d match%s, and what came close" % (
             n, "" if n == 1 else "es")
-    return "%d job%s matched your resume today" % (n, "" if n == 1 else "s")
+    return "%d job%s matched your resume" % (n, "" if n == 1 else "s")
 
 
 def _build_message(to_addr, subject, html_body, pdf_path):

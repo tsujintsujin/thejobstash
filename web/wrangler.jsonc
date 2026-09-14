@@ -25,7 +25,7 @@
     { "pattern": "www.thejobstash.com", "custom_domain": true }
   ],
 
-  // The shared job pool, users, entitlements and sessions. D1 is SQLite, so
+  // The shared job pool, users, credits, payments and sessions. D1 is SQLite, so
   // every query that ran against the local jobstash.db runs here unchanged -
   // and db.py on the home machine talks to this same database through d1.py,
   // which is what keeps one pool and one set of scoring rules.
@@ -57,7 +57,14 @@
     // The named tunnel on Justin's machine. Stable across restarts, unlike a
     // quick tunnel's random trycloudflare.com name. Not a secret - the bearer
     // token is what actually guards it.
-    "JOBSTASH_PY_ORIGIN": "https://scorer.thejobstash.com"
+    "JOBSTASH_PY_ORIGIN": "https://scorer.thejobstash.com",
+
+    // Google compares this string exactly against a URI registered on the
+    // OAuth client. Without it googleRedirectUri() falls back to
+    // http://localhost:3200/... - which is what a deployed sign-in actually
+    // did: Google sent the user back to a dev server that was not running.
+    // Not a secret; it is visible in every authorize URL.
+    "JOBSTASH_GOOGLE_REDIRECT_URI": "https://thejobstash.com/api/auth/google/callback"
   }
 
   // Secrets (never in this file - `npx wrangler secret put <NAME>`):
@@ -65,10 +72,9 @@
   //   JOBSTASH_GOOGLE_CLIENT_ID      when Google sign-in is switched on
   //   JOBSTASH_GOOGLE_CLIENT_SECRET
   //   JOBSTASH_GOOGLE_REDIRECT_URI
+  //   PAYMONGO_SECRET_KEY            credit-pack checkout, lib/paymongo.ts
   //
-  // No cron trigger here on purpose. The daily delivery still runs from n8n
-  // on the home machine, because that is where the Python and the renderer
-  // live - and run_delivery.py now writes straight into D1. Moving the
-  // schedule up here would mean a Worker waking a machine that may be asleep,
-  // which is worse than the machine deciding for itself.
+  // No cron trigger. There is no daily delivery: a run starts when a user
+  // presses Run on the dashboard, and n8n on the home machine carries it out,
+  // because that is where the Python and the renderer live.
 }

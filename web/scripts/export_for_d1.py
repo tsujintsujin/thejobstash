@@ -26,7 +26,7 @@ DB = os.environ.get("JOBSTASH_DB", os.path.join(ROOT, "jobstash.db"))
 OUT = os.path.join(HERE, "..", "seed.sql")
 
 # Order matters: users before anything referencing users.
-TABLES = ["jobs", "users", "profiles", "entitlements", "sent_jobs",
+TABLES = ["jobs", "users", "profiles", "payments", "runs", "sent_jobs",
           "deliveries", "trial_runs", "sessions"]
 # Cap each INSERT by BYTES, not by row count. Job descriptions run to several
 # kilobytes each, so a fixed 50 rows produced statements D1 rejected outright

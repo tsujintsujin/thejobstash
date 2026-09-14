@@ -5,7 +5,6 @@ import {
   userByGoogleSub,
   createOAuthUser,
   linkGoogleSub,
-  grantPlan,
 } from "@/lib/db";
 import { createSession, safeNext } from "@/lib/session";
 import {
@@ -15,24 +14,49 @@ import {
   googleTokenEndpoint,
 } from "@/lib/google";
 
-/** Everything that can go wrong lands back on the card with a readable line. */
-function bounce(origin: string, message: string) {
-  return NextResponse.redirect(
-    `${origin}/signup?mode=signin&err=${encodeURIComponent(message)}`
+/**
+ * In popup mode the window closes itself and tells the card what happened.
+ * BroadcastChannel rather than `window.opener.postMessage`: Google's pages set
+ * Cross-Origin-Opener-Policy, which severs `opener` for the rest of the popup's
+ * life, but a same-origin channel still reaches the page that opened it.
+ */
+function popupDone(msg: { redirect?: string; error?: string }) {
+  const json = JSON.stringify(msg).replace(/</g, "\\u003c");
+  return new NextResponse(
+    `<!doctype html><meta charset="utf-8"><title>Signing in…</title>` +
+      `<p style="font-family:sans-serif">You can close this window.</p>` +
+      `<script>new BroadcastChannel("jobstash-auth").postMessage(${json});window.close();</script>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8" } }
   );
 }
+
 
 export async function GET(req: NextRequest) {
   const origin = req.nextUrl.origin;
   const jar = await cookies();
   const raw = jar.get("jobstash_oauth")?.value || "";
   jar.delete("jobstash_oauth"); // single use, whatever happens below
+  const popup = jar.get("jobstash_oauth_popup")?.value === "1";
+  jar.delete("jobstash_oauth_popup");
+
+  // Scoped to this request, not the module: an isolate serves many at once.
+  /** Everything that can go wrong lands back on the card with a readable line. */
+  const bounce = (origin: string, message: string) =>
+    popup
+      ? popupDone({ error: message })
+      : NextResponse.redirect(
+          `${origin}/signup?mode=signin&err=${encodeURIComponent(message)}`
+        );
+  const land = (origin: string, path: string) =>
+    popup ? popupDone({ redirect: path }) : NextResponse.redirect(`${origin}${path}`);
 
   if (!googleConfigured()) return bounce(origin, "Google sign-in isn't set up yet.");
 
   const params = req.nextUrl.searchParams;
   // The visitor pressed Cancel on Google's screen. Not an error worth shouting.
-  if (params.get("error")) return NextResponse.redirect(`${origin}/signup?mode=signin`);
+  if (params.get("error")) {
+    return popup ? popupDone({}) : NextResponse.redirect(`${origin}/signup?mode=signin`);
+  }
 
   const code = params.get("code") || "";
   // Split on the FIRST colon only. `raw.split(":")` dropped everything after
@@ -94,16 +118,15 @@ export async function GET(req: NextRequest) {
       await linkGoogleSub(existing.id, sub);
       user = existing;
     } else {
+      // The free credit is the users.credits column default, same as the
+      // password signup path - there is nothing to grant here.
       user = await createOAuthUser(email, sub);
-      // Matches the password signup path: payments are off, so the default
-      // window is granted immediately. Stripe's webhook writes the same row.
-      await grantPlan(user.id, "seven_day");
       await createSession(user.id);
       // A brand new account has no resume, and nothing works until it does.
-      return NextResponse.redirect(`${origin}/upload`);
+      return land(origin, "/upload");
     }
   }
 
   await createSession(user.id);
-  return NextResponse.redirect(`${origin}${safeNext(storedNext)}`);
+  return land(origin, safeNext(storedNext));
 }

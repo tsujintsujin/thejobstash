@@ -4,13 +4,14 @@ REM  TheJobStash scorer - the one piece that still runs on this machine.
 REM
 REM  The site itself is on Cloudflare and does not need this to serve pages,
 REM  sign people in, or show the dashboard. What needs it is anything that runs
-REM  Python: the free trial, resume upload, digest preview and delivery. Those
-REM  say "the scorer is offline" while this is not running.
+REM  Python: resume upload and every run of a resume. Those say "the scorer
+REM  is offline" while this is not running.
 REM
-REM  Double-click this, or run it from a terminal. It starts two things:
+REM  Double-click this, or run it from a terminal. It starts three things:
 REM    1. py_server.py   - api_bridge's commands over HTTP on localhost:3300
 REM    2. cloudflared    - dials OUT to Cloudflare and publishes that as
 REM                        https://scorer.thejobstash.com
+REM    3. n8n            - the run workflow py_server.py hands each run to
 REM
 REM  Nothing listens for inbound connections and no port is forwarded.
 REM  Close this window to stop both.
@@ -39,7 +40,8 @@ echo.
 
 start "jobstash scorer" cmd /c "python py_server.py & pause"
 start "jobstash tunnel" cmd /c ""%CLOUDFLARED%" tunnel run jobstash-scorer & pause"
+start "jobstash n8n" cmd /c ""D:\AIO Freelance\n8n\start_n8n.cmd" & pause"
 
-echo Both started in their own windows. Close them to stop.
+echo All three started in their own windows. Close them to stop.
 timeout /t 5 >nul
 endlocal

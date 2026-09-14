@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { poolStats } from "@/lib/db";
 import { currentUser } from "@/lib/session";
-import TrialFlow from "./TrialFlow";
+import { googleConfigured } from "@/lib/google";
+import { FREE_CREDITS, PACKS, TEST_PRICE_PHP, chargePhp } from "@/lib/packs";
+import AuthModal from "./AuthModal";
+import UploadModal from "./UploadModal";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +43,7 @@ const STEPS = [
     n: "02",
     bg: "bg-paper",
     h: "We sweep",
-    p: "Ten job boards, every morning. Deduplicated across all of them, so one role posted four times is one row.",
+    p: "Ten job boards, swept fresh when you run. Deduplicated across all of them, so one role posted four times is one row.",
   },
   {
     n: "03",
@@ -55,7 +58,7 @@ const STEPS = [
     n: "04",
     bg: "bg-ink text-bone",
     h: "You get the list",
-    p: "A short email, every day of your plan. Never the same job twice.",
+    p: "A short digest the moment your run finishes. Never the same job twice.",
   },
 ];
 
@@ -65,16 +68,20 @@ const FAQ = [
     "A job board shows you everything and makes you filter. We do the opposite: we throw away about 96% of what we scrape and show you what's left. The discarded pile is the product — thousands of postings a day that are in the wrong country, need work authorisation you don't hold, want twice your years, or centre on tools you've never touched.",
   ],
   [
+    "How do credits work?",
+    "One credit is one run: we sweep the boards, score every posting against your resume and hand you the digest. Every account starts with one free. After that you buy a pack of 3, 5 or 12 through PayMongo. No subscription, nothing recurring, and credits don't expire.",
+  ],
+  [
     "What does 'came close' mean?",
     "Roles that matched your actual work but were blocked by exactly one thing — the wrong country, a timezone window, a couple of years too many. We show them with the reason attached, because a quiet day where you can see what's in the way is more useful than a short list with no explanation.",
   ],
   [
     "Will I get the same jobs over and over?",
-    "No. Every job you've been shown is recorded against your account, so day four never repeats day one. If a day is thin, we backfill from good matches we deliberately held back earlier rather than resending something you've seen.",
+    "No. Every job you've been shown is recorded against your account, so your fourth run never repeats your first. If a run comes up thin, we backfill from good matches we deliberately held back earlier rather than resending something you've seen.",
   ],
   [
-    "What if there's nothing good on a given day?",
-    "You get a shorter email that says so plainly, the near-misses with their reasons, and an extra day added to your plan. We'd rather do that than pad the list with roles that don't fit.",
+    "What if a run turns up nothing good?",
+    "You get a shorter digest that says so plainly, with the near-misses and their reasons. It still uses the credit, because the sweep and the scoring happened, but we'd rather hand you a short honest list than pad it with roles that don't fit. A run that fails outright gives the credit back.",
   ],
   [
     "Do I need to link any accounts?",
@@ -89,7 +96,7 @@ const FAQ = [
 export default async function Home() {
   const stats = await poolStats();
   const user = await currentUser();
-  const cta = user ? "/dashboard" : "/signup";
+  const googleReady = googleConfigured();
 
   return (
     <main>
@@ -111,28 +118,33 @@ export default async function Home() {
               Start applying.
             </h1>
             <p className="lede opacity-95 mb-[30px]">
-              Upload your resume once. Every morning we score thousands of live
-              postings against it and send you the handful worth your time —
-              plus the ones that came close, and exactly what blocked them.
+              Upload your resume once. Each time you run it, we sweep the job
+              boards, score thousands of live postings against it and hand you
+              the handful worth your time — plus the ones that came close, and
+              exactly what blocked them.
             </p>
             <div className="flex gap-3.5 flex-wrap">
-              {/* Signed out, this opens the free scan rather than sending
-                  somebody to a signup form before they have seen anything
-                  the product actually does. */}
+              {/* Scoring costs one machine real work, so nothing runs a
+                  resume without an account behind it. Signed out, this opens
+                  the signup card in a dialog rather than navigating off the
+                  page before anyone has read what the product does. */}
               {user ? (
-                <Link href="/dashboard" className="btn">
-                  Go to dashboard
-                </Link>
+                <UploadModal label="Upload resume" />
               ) : (
-                <TrialFlow label="Upload a resume — free" />
+                <AuthModal
+                  label="Upload a resume — free"
+                  googleReady={googleReady}
+                  pool={stats.pool}
+                  sources={stats.sources}
+                />
               )}
               <Link href="#how" className="btn btn-paper">
                 See how it works
               </Link>
             </div>
             <p className="text-[13px] mt-[18px] opacity-80">
-              No account needed to scan. Payments are off while we&rsquo;re
-              testing.
+              Free account, and your first run is on us. No card, no
+              subscription.
             </p>
           </div>
 
@@ -154,7 +166,7 @@ export default async function Home() {
               <div className="bg-ink text-bone px-4 py-3 flex justify-between items-baseline">
                 <b className="text-sm">Your digest</b>
                 <span className="text-[10px] tracking-[.1em] opacity-75">
-                  TODAY
+                  THIS RUN
                 </span>
               </div>
               <div className="p-3.5">
@@ -204,12 +216,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* Trial results mount here, deliberately outside the hero. They are a
-          full page of sections in their own right - stats, secheads, job
-          cards - and inside the hero every one of them would be sitting on
-          ink rather than on the bone ground they are drawn for. */}
-      <div id="trial-results" />
-
       <div className="bg-sun border-b-3 border-ink overflow-hidden whitespace-nowrap py-[11px]">
         <div className="marquee-inner">
           {[...MARQUEE, ...MARQUEE].map((m, i) => (
@@ -249,7 +255,7 @@ export default async function Home() {
             </div>
             <div className={`${STAT} bg-lime`}>
               <b className={STAT_N}>~20</b>
-              <span className={STAT_L}>Sent per day</span>
+              <span className={STAT_L}>Per digest</span>
             </div>
           </div>
         </div>
@@ -308,7 +314,7 @@ export default async function Home() {
               <div className="card bg-sun">
                 <b className="text-[30px] tracking-[-0.03em]">~1,000</b>
                 <p className="text-sm font-bold mt-1">
-                  new postings scraped daily
+                  new postings a day across the boards
                 </p>
               </div>
               <div className="card bg-lime">
@@ -320,7 +326,7 @@ export default async function Home() {
               <div className="card bg-ink text-bone">
                 <b className="text-[30px] tracking-[-0.03em]">0</b>
                 <p className="text-sm font-bold mt-1">
-                  repeated from a previous day
+                  repeated from an earlier run
                 </p>
               </div>
             </div>
@@ -328,68 +334,39 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* plans */}
-      <section id="plans" className="band bg-sun">
+      {/* pricing */}
+      <section id="pricing" className="band bg-sun">
         <div className="wrap">
-          <span className="eyebrow">Pick a window</span>
-          <h2 className="text-h2 mt-5 mb-2.5">Buy days, not a subscription.</h2>
+          <span className="eyebrow">Credits</span>
+          <h2 className="text-h2 mt-5 mb-2.5">Pay per run, not a subscription.</h2>
           <p className="lede mb-[30px]">
-            No recurring billing, nothing to cancel. When your days run out, it
-            stops. If a day comes up thin, we add a day.
+            One credit is one run of your resume: the boards swept, every posting
+            scored, your digest handed over. Every account starts with{" "}
+            {FREE_CREDITS} free. Nothing recurs, and credits don&rsquo;t expire.
           </p>
           <div className={G3}>
-            {[
-              {
-                plan: "one_time",
-                name: "One sweep",
-                price: "Free",
-                was: "$9",
-                bg: "bg-paper",
-                lines: [
-                  "A single deep sweep",
-                  "Reaches back over everything still live",
-                  "Typically the biggest list you'll get",
-                  "PDF emailed to you",
-                ],
-              },
-              {
-                // The middle plan is the recommended one, so it is the only
-                // one wearing an accent — and jade, because it is a
-                // recommendation rather than a warning.
-                plan: "three_day",
-                name: "Three days",
-                price: "Free",
-                was: "$19",
-                bg: "bg-jade",
-                lines: [
-                  "Deep sweep on day one",
-                  "Then two days of new matches",
-                  "Never repeats a job",
-                  "Thin day? We add a day",
-                ],
-              },
-              {
-                plan: "seven_day",
-                name: "Seven days",
-                price: "Free",
-                was: "$39",
-                bg: "bg-paper",
-                lines: [
-                  "Deep sweep on day one",
-                  "Then six days of new matches",
-                  "Backfilled from a held-back reserve",
-                  "Best for an active search",
-                ],
-              },
-            ].map((p) => (
-              <div key={p.plan} className={`card flex flex-col p-[22px] ${p.bg}`}>
-                <span className="tag self-start">{p.name}</span>
+            {PACKS.map((p, i) => (
+              // The middle pack is the recommended one, so it is the only one
+              // wearing an accent — jade, because it is a recommendation
+              // rather than a warning.
+              <div
+                key={p.id}
+                className={`card flex flex-col p-[22px] ${i === 1 ? "bg-jade" : "bg-paper"}`}
+              >
+                <span className="tag self-start">{p.credits} credits</span>
                 <div className="text-[34px] font-extrabold tracking-[-0.03em] mt-2 mb-1">
-                  {p.price}{" "}
-                  <s className="text-[17px] opacity-45 font-bold">{p.was}</s>
+                  ₱{chargePhp(p)}{" "}
+                  {TEST_PRICE_PHP !== null && (
+                    <s className="text-[17px] opacity-45 font-bold">₱{p.php}</s>
+                  )}
                 </div>
                 <ul className="list-none mt-3.5 mb-5">
-                  {p.lines.map((l) => (
+                  {[
+                    `${p.credits} runs of your resume`,
+                    `About ₱${Math.round(p.php / p.credits)} a run`,
+                    "Jobs swept within 30 minutes of your run",
+                    "Pay with QR Ph: GCash, Maya or your bank app",
+                  ].map((l) => (
                     <li
                       key={l}
                       className="text-[13.5px] font-semibold py-[5px]
@@ -399,8 +376,11 @@ export default async function Home() {
                     </li>
                   ))}
                 </ul>
-                <Link href={cta} className="btn btn-ink mt-auto text-center">
-                  Start free
+                <Link
+                  href={user ? "/dashboard#buy" : "/signup"}
+                  className="btn btn-ink mt-auto text-center"
+                >
+                  {user ? "Buy credits" : "Start with 1 free run"}
                 </Link>
               </div>
             ))}
@@ -443,18 +423,21 @@ export default async function Home() {
           swallowing the whole block. */}
       <section className="band bg-azure text-bone text-center">
         <div className="narrow">
-          <h2 className="text-h2 mb-4">One resume. One list. Every morning.</h2>
+          <h2 className="text-h2 mb-4">One resume. One credit. One good list.</h2>
           <p className="lede mx-auto mb-7">
-            Takes about thirty seconds to set up, and you&rsquo;ll see your
-            first matches immediately.
+            Takes about thirty seconds to set up, and your first run is
+            on us.
           </p>
           <div className="flex justify-center">
             {user ? (
-              <Link href="/dashboard" className="btn">
-                Go to dashboard
-              </Link>
+              <UploadModal label="Upload resume" />
             ) : (
-              <TrialFlow label="Scan my resume — free" />
+              <AuthModal
+                label="Scan my resume — free"
+                googleReady={googleReady}
+                pool={stats.pool}
+                sources={stats.sources}
+              />
             )}
           </div>
         </div>

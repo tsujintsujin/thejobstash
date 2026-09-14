@@ -61,6 +61,23 @@ SHOWABLE_BLOCKERS = {"geography", "seniority", "thin_skills",
                      "authorisation", "onsite"}
 
 
+def _skills_named(body):
+    """How many known skills this posting names at all - the denominator.
+
+    Cached per body: score_many() runs this over the whole pool, and the vocab
+    is a few hundred terms.
+    """
+    n = _SKILLS_NAMED_CACHE.get(body)
+    if n is None:
+        from resume_parse import SKILL_VOCAB
+        n = sum(1 for s in SKILL_VOCAB if tok(s, body))
+        _SKILLS_NAMED_CACHE[body] = n
+    return n
+
+
+_SKILLS_NAMED_CACHE = {}
+
+
 @dataclass
 class Blocker:
     kind: str          # geography | seniority | thin_skills | skill_gap |
@@ -82,9 +99,19 @@ class Match:
     def is_match(self):
         return not self.blockers
 
+    # A blocker that disqualifies the job outright, whatever else is true of
+    # it. "Came close" has to mean "you almost qualify", so a role in a
+    # different line of work must not buy its way into the section on the
+    # strength of also being in the wrong city: HR Coordinator and Sales
+    # Operations Coordinator were rendering under "Came close" with the reason
+    # "Centres on work outside your field" printed next to them.
+    VETO_BLOCKERS = {"off_field"}
+
     @property
     def showable(self):
         """Whether this earns a slot in the digest at all."""
+        if any(b.kind in self.VETO_BLOCKERS for b in self.blockers):
+            return False
         if not self.blockers:
             return True
         return any(b.kind in SHOWABLE_BLOCKERS for b in self.blockers)
@@ -367,7 +394,12 @@ def classify_geo(job, profile):
     if loc_home and not remote:
         if profile.wants_local_onsite:
             return "home_onsite", None
-        return "blocked", Blocker("geography", "Onsite in %s" % shown_loc)
+        # Not a geography failure: this job is in the user's own country and is
+        # entirely reachable. What stops it is a work-setup preference, so it
+        # must not rank alongside "Hiring in Riyadh" - for someone in Cebu, a
+        # job in Cebu is the most actionable near-miss in the pool, and
+        # wants_local_onsite is currently assumed False for every user.
+        return "blocked", Blocker("onsite", "Onsite in %s" % shown_loc)
     if loc_home and remote:
         return "home_remote", None
 
@@ -386,7 +418,7 @@ def classify_geo(job, profile):
             return "home_remote", None
         if profile.wants_local_onsite:
             return "home_onsite", None
-        return "blocked", Blocker("geography", "Onsite in %s" % shown_loc)
+        return "blocked", Blocker("onsite", "Onsite in %s" % shown_loc)
 
     # The board told us nothing. Require the body to claim open-to-anywhere
     # rather than assuming it, which is what lets a Chile-only role pass.
@@ -430,11 +462,45 @@ def score(job, profile):
         pts += profile.strong_skills[s]
     if hits:
         reasons.append("matches " + ", ".join(hits[:12]))
-    if len(hits) < profile.min_skill_hits:
+    # The bar is whichever is smaller: what this profile should clear, and what
+    # this posting actually asks for. profile.min_skill_hits alone uses resume
+    # size as a proxy for how many overlaps are *achievable*, which holds for
+    # software - a React posting names react, typescript, css, git - and fails
+    # for everything else. Measured on a clerical resume: 97 of its 108 scored
+    # postings named zero known skills and the ceiling across the whole pool
+    # was two, so a bar of three excluded the two jobs that fit best. Asking
+    # someone to match three skills a posting never mentions is not a standard,
+    # it is an impossible one.
+    asked = _skills_named(body)
+    need = min(profile.min_skill_hits, max(1, asked))
+
+    # A lowered bar must still be cleared by evidence from this person's own
+    # field. "excel" is a core admin skill and an incidental one for a
+    # developer, so without this an RPA developer role (UiPath/n8n) scored as
+    # a clean MATCH on the single word excel, carried there from a graphic
+    # designer's CV. family_skills is empty on profiles stored before this
+    # existed, and the check simply does not apply to them.
+    fam = set(profile.family_skills or ())
+    relevant = [s for s in hits if s in fam] if fam else hits
+
+    if len(hits) < need or not relevant:
         wanted = [t for t in profile.unshipped if tok(t, body)][:3]
-        detail = ("Also wanted " + ", ".join(wanted) if wanted
-                  else "Overlaps with only %d of your listed skills" % len(hits))
-        blockers.append(Blocker("thin_skills", detail))
+        if not relevant:
+            # Nothing from this person's own field overlaps at all, so this is
+            # not a near-miss - it is a different job. "Came close" has to mean
+            # "you almost qualify" or the section is worthless: an RPA
+            # developer role reached a designer's profile on the word excel,
+            # and calling that a near-miss is indefensible. Same reasoning the
+            # skill_gap comment above already applies; off_field is
+            # deliberately absent from SHOWABLE_BLOCKERS.
+            detail = ("Overlaps only on " + ", ".join(hits[:3]) if hits
+                      else "Centres on work outside your field")
+            blockers.append(Blocker("off_field", detail))
+        else:
+            detail = ("Also wanted " + ", ".join(wanted) if wanted
+                      else "Overlaps with only %d of your listed skills"
+                           % len(hits))
+            blockers.append(Blocker("thin_skills", detail))
 
     # -- seniority ----------------------------------------------------------
     years_req = parse_years_required(body)
@@ -449,7 +515,7 @@ def score(job, profile):
         elif gap <= -2:
             blockers.append(Blocker("seniority",
                                     "Pitched at %s level" % job_level))
-    if years_req is not None:
+    if years_req is not None and profile.years_experience is not None:
         if years_req > profile.years_experience + 2:
             blockers.append(Blocker("seniority", "Asks for %d+ years" % years_req))
         elif years_req > profile.years_experience:

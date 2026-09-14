@@ -1,24 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
-import {
-  activeEntitlement,
-  deliveriesFor,
-  profileFor,
-  poolStats,
-  todayIso,
-} from "@/lib/db";
+import { deliveriesFor, profileFor, poolStats } from "@/lib/db";
 import DigestPanel from "./DigestPanel";
-import PlanPicker from "./PlanPicker";
-import { G4, SECHEAD_NOTE, STAT, STAT_L, STAT_N } from "../ui";
+import DeleteDigest from "./DeleteDigest";
+import BuyCredits from "./BuyCredits";
+import { G3, SECHEAD_NOTE, STAT, STAT_L, STAT_N } from "../ui";
 
 export const dynamic = "force-dynamic";
-
-const PLAN_NAME: Record<string, string> = {
-  one_time: "One sweep",
-  three_day: "Three days",
-  seven_day: "Seven days",
-};
 
 /* The attribute grid. One ink background showing through 1px gaps, so the
    rules between cells are the same ink as every other border on the page
@@ -35,25 +24,19 @@ const FACT_V =
 const FACT_NOTE =
   "block not-italic text-[11.5px] font-semibold opacity-65 mt-[3px] leading-[1.35]";
 
-function daysLeft(endsOn: string) {
-  const end = new Date(endsOn + "T23:59:59Z").getTime();
-  return Math.max(0, Math.ceil((end - Date.now()) / 86400000));
-}
-
 export default async function Dashboard() {
   const user = await currentUser();
   if (!user) redirect("/signup?mode=signin");
 
-  // Four independent reads, so they go together rather than one after the
-  // other - each is a network round trip to D1 now, not a local file read.
-  const [profile, ent, deliveries, stats] = await Promise.all([
+  // Independent reads, so they go together rather than one after the other -
+  // each is a network round trip to D1 now, not a local file read.
+  const [profile, deliveries, stats] = await Promise.all([
     profileFor(user.id),
-    activeEntitlement(user.id),
     deliveriesFor(user.id),
     poolStats(),
   ]);
   const parsed = profile ? JSON.parse(profile.profile_json) : null;
-  const deliveredToday = deliveries.some((d) => d.day === todayIso());
+  const credits = user.credits ?? 0;
 
   return (
     <main className="pb-[60px]">
@@ -65,13 +48,7 @@ export default async function Dashboard() {
               signed up with Google has no password, and finding that out at
               the sign-in screen months later - against an error that
               deliberately will not explain itself - is a bad afternoon. */}
-          <p className="text-[12.5px] opacity-70 mt-1 font-semibold">
-            {user.google_sub && user.password_hash
-              ? "Sign in with Google or your password"
-              : user.google_sub
-                ? "Signed in with Google — this account has no password"
-                : "Signed in with an email and password"}
-          </p>
+        
         </div>
       </section>
 
@@ -79,18 +56,16 @@ export default async function Dashboard() {
         {/* Status row. Only the account's state is coloured — four accented
             tiles would rank nothing, and this is a working surface rather
             than a landing page. */}
-        <div className={`${G4} mb-2`}>
-          <div className={`${STAT} ${ent ? "bg-jade" : "bg-sun"}`}>
-            <b className={STAT_N}>{ent ? daysLeft(ent.ends_on) : 0}</b>
-            <span className={STAT_L}>{ent ? "Days left" : "No active plan"}</span>
-          </div>
-          <div className={`${STAT} bg-paper`}>
-            <b className={STAT_N}>{ent ? PLAN_NAME[ent.plan] ?? ent.plan : "—"}</b>
-            <span className={STAT_L}>Current plan</span>
+        <div className={`${G3} mb-2`}>
+          <div className={`${STAT} ${credits ? "bg-jade" : "bg-sun"}`}>
+            <b className={STAT_N}>{credits}</b>
+            <span className={STAT_L}>
+              {credits === 1 ? "Credit left" : "Credits left"}
+            </span>
           </div>
           <div className={`${STAT} bg-paper`}>
             <b className={STAT_N}>{deliveries.length}</b>
-            <span className={STAT_L}>Digests so far</span>
+            <span className={STAT_L}>Stash so far</span>
           </div>
           <div className={`${STAT} bg-paper`}>
             <b className={STAT_N}>{stats.pool.toLocaleString()}</b>
@@ -132,7 +107,7 @@ export default async function Dashboard() {
             <div className={FACTS}>
               <div className={FACT}>
                 <span className={FACT_K}>Experience</span>
-                <b className={FACT_V}>{parsed.years_experience} yrs</b>
+                <b className={FACT_V}>{parsed.years_experience ?? "—"} yrs</b>
                 <em className={FACT_NOTE}>relevant to this field</em>
               </div>
               <div className={FACT}>
@@ -223,38 +198,29 @@ export default async function Dashboard() {
           </div>
         )}
 
-        {/* plan */}
-        {!ent && (
-          <>
-            <div className="sechead bg-sun">
-              <h2 className="text-xl">Start a plan</h2>
-              <em className={SECHEAD_NOTE}>Free while payments are switched off</em>
-            </div>
-            <PlanPicker />
-          </>
-        )}
-
         {/* digest — the main event, so it takes the dark head. */}
         <div className="sechead bg-ink text-bone">
-          <h2 className="text-xl">Today&rsquo;s matches</h2>
+          <h2 className="text-xl">Run your resume</h2>
           <em className={SECHEAD_NOTE}>
-            {deliveredToday
-              ? "Already delivered today — this shows what's left in the pool"
-              : "Scored live against your resume"}
+            One credit one sweep
           </em>
         </div>
 
-        <DigestPanel
-          hasProfile={!!profile}
-          hasPlan={!!ent}
-          deliveredToday={deliveredToday}
-        />
+        <DigestPanel hasProfile={!!profile} credits={credits} />
+
+        {/* credits — sun only when the balance is empty, because that is when
+            buying is the next thing to do. */}
+        <div id="buy" className={`sechead scroll-mt-4 ${credits ? "bg-paper" : "bg-sun"}`}>
+          <h2 className="text-xl">Buy credits</h2>
+          <em className={SECHEAD_NOTE}>One credit is one run. They don&rsquo;t expire.</em>
+        </div>
+        <BuyCredits />
 
         {/* history */}
         {deliveries.length > 0 && (
           <>
             <div className="sechead bg-paper">
-              <h2 className="text-xl">Past digests</h2>
+              <h2 className="text-xl">Stash</h2>
               <em className={SECHEAD_NOTE}>Every one is still downloadable</em>
             </div>
             {deliveries.map((d) => (
@@ -274,20 +240,39 @@ export default async function Dashboard() {
                       {d.email_status === "outbox" && " (written to outbox/)"}
                     </div>
                   </div>
+                  {/* ?v= is a cache-buster, not a parameter the route reads.
+                      A 410 from before the download fix is still sitting in
+                      browsers; 410 is heuristically cacheable and the route's
+                      no-store cannot evict an entry stored without it. A URL
+                      that was never poisoned is the only thing that gets past
+                      it. */}
                   <div className="flex gap-[7px] flex-wrap">
                     <a
                       className="btn btn-paper btn-sm"
-                      href={`/api/download/${d.id}?format=html`}
+                      href={`/api/download/${d.id}?format=html&v=${encodeURIComponent(d.created_at)}`}
                       target="_blank"
                       rel="noreferrer"
                     >
                       View
                     </a>
+                    {/* PDF is ink, not the bare .btn default. Bare .btn is
+                        flare, and flare is this page's one header-level accent
+                        - Sign out wears it. A row action shouting louder than
+                        the primary action below it read as a different design.
+                        Paper + ink is the pair every other control here uses. */}
                     {d.pdf_path && (
-                      <a className="btn btn-sm" href={`/api/download/${d.id}`}>
+                      <a
+                        className="btn btn-ink btn-sm"
+                        href={`/api/download/${d.id}?v=${encodeURIComponent(d.created_at)}`}
+                      >
                         PDF
                       </a>
                     )}
+                    <span
+                      aria-hidden="true"
+                      className="self-stretch w-[3px] bg-ink opacity-25 mx-0.5"
+                    />
+                    <DeleteDigest id={d.id} day={d.day} />
                   </div>
                 </div>
               </div>

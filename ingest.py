@@ -3,7 +3,7 @@
 Scrape every board once and put the results in the shared pool.
 
 This is the half of the pipeline that is user-independent, and keeping it that
-way is the whole reason the product scales: one sweep serves every subscriber,
+way is the whole reason the product scales: one sweep serves every user,
 so the marginal cost of the five-hundredth user is a SQL query rather than
 another thirteen HTTP crawls.
 
@@ -17,8 +17,9 @@ Two things it does that JobHunt's sweep does not:
 
     python ingest.py            all sources
     python ingest.py --fast     JSON APIs only, no Playwright
+    python ingest.py --age      minutes since the last sweep landed, as JSON
 """
-import os, re, sys, hashlib, io, json
+import os, re, sys, hashlib, io, json, datetime, time
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -26,6 +27,7 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.environ.get("JOBHUNT_DIR", r"D:\AIO Freelance\JobHunt"))
 
 import sources                                    # shared, read-only
+import stash_sources                              # the three PH boards, keyword-free
 import db
 
 # Everything except the three that need a browser or slow HTML scraping.
@@ -33,8 +35,14 @@ FAST_SOURCES = ["himalayas", "remoteok", "remotive", "arbeitnow", "jobicy",
                 "workingnomads", "themuse", "weworkremotely", "jobspresso",
                 "hackernews"]
 
-DESCRIPTION_LIMIT = 3000        # ~180MB/year at 1k jobs/day with 60-day pruning
-RETENTION_DAYS = 60
+DESCRIPTION_LIMIT = 3000        # pruning is prune_jobs.py, its own n8n workflow
+
+# One sweep at a time. Runs arrive whenever users press Run, and two sweeps of
+# 13 boards at once would double the load on the boards and race on the pool
+# file. An hour is well past the slowest sweep seen, so a lock older than that
+# belongs to a sweep that crashed.
+LOCK = os.path.join(HERE, "ingest.lock")
+LOCK_STALE_S = 60 * 60
 
 
 def norm(s):
@@ -55,19 +63,76 @@ def fingerprint(job):
          ).encode("utf-8")).hexdigest()
 
 
-def prune(conn, days=RETENTION_DAYS):
-    """Job adverts older than two months are dead. Keeping them costs storage
-    and would let a stale posting reach a paying user."""
-    cur = conn.execute(
-        "DELETE FROM jobs WHERE last_seen < datetime('now', ?)",
-        ("-%d days" % days,))
-    return cur.rowcount
+def push_pool_stats(total, with_desc):
+    """Send the home page its three numbers.
+
+    This is the entire reason the pool ever needed to be reachable from the
+    site. poolStats() used to run three aggregates across every row on every
+    render of the busiest page; now it reads one row that this writes once a
+    day. Best effort: a failed push costs a stale counter on the home page,
+    never an ingest.
+    """
+    try:
+        conn = db.init()
+        fresh = db.jobs_conn().execute(
+            "SELECT COUNT(*) c FROM jobs "
+            "WHERE first_seen >= datetime('now','-3 days')").fetchone()["c"]
+        srcs = db.jobs_conn().execute(
+            "SELECT COUNT(DISTINCT source) c FROM jobs").fetchone()["c"]
+        conn.execute("DELETE FROM pool_stats WHERE id=1")
+        conn.execute(
+            "INSERT INTO pool_stats (id,pool,fresh,sources,updated_at) "
+            "VALUES (1,?,?,?,?)", (total, fresh, srcs, db.now_iso()))
+        conn.commit()
+        conn.close()
+    except Exception as e:                      # noqa: BLE001
+        sys.stderr.write("[ingest] pool_stats push failed: %s\n" % e)
+
+
+def pool_age_minutes():
+    """Minutes since the last sweep landed, or None for an empty pool.
+
+    Every sweep stamps last_seen on each job a board still lists and commits
+    once at the end, so the newest last_seen is when the last sweep landed.
+    """
+    t = db.jobs_conn().execute("SELECT MAX(last_seen) t FROM jobs").fetchone()["t"]
+    if not t:
+        return None
+    then = datetime.datetime.strptime(t, "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return int((now - then).total_seconds() // 60)
+
+
+def take_lock():
+    try:
+        if time.time() - os.path.getmtime(LOCK) > LOCK_STALE_S:
+            os.unlink(LOCK)
+    except OSError:
+        pass
+    try:
+        os.close(os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        return True
+    except FileExistsError:
+        return False
 
 
 def run(fast=False, verbose=True):
-    conn = db.init()
+    # The pool is local - see db.jobs_conn(). use_live_store() is still
+    # needed so the pool_stats push at the end reaches D1, and so anything
+    # else this process opens talks to the deployed account store.
+    db.use_live_store()
+    conn = db.jobs_conn()
     names = FAST_SOURCES if fast else [n for n, _ in sources.ALL_SOURCES]
-    picked = [(n, fn) for n, fn in sources.ALL_SOURCES if n in names]
+    # JobStreet skips the per-ad fetch for ads already stored in full. A
+    # teaser-only row is a few hundred chars; a fetched ad runs to thousands.
+    known = {r["url"] for r in conn.execute(
+        "SELECT url FROM jobs WHERE source='jobstreet' "
+        "AND length(COALESCE(description,'')) > 800")}
+    own = {"kalibrr": stash_sources.kalibrr,
+           "onlinejobs": stash_sources.onlinejobs,
+           "jobstreet": lambda: stash_sources.jobstreet(known)}
+    picked = [(n, own.get(n, fn)) for n, fn in sources.ALL_SOURCES if n in names]
 
     fetched = new = dupes = 0
     report = []
@@ -103,16 +168,16 @@ def run(fast=False, verbose=True):
             print("  %-16s %5d fetched  %4d new" % (name, len(rows), added))
 
     conn.commit()
-    removed = prune(conn)
-    conn.commit()
     total = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
     with_desc = conn.execute(
         "SELECT COUNT(*) c FROM jobs WHERE length(COALESCE(description,''))>0"
     ).fetchone()["c"]
     conn.close()
 
+    push_pool_stats(total, with_desc)
+
     return {"fetched": fetched, "new": new, "duplicates": dupes,
-            "pruned": removed, "pool": total, "with_description": with_desc,
+            "pool": total, "with_description": with_desc,
             "sources": report}
 
 
@@ -130,8 +195,26 @@ if __name__ == "__main__":
     else:
         log = sys.stdout
 
+    if "--age" in sys.argv:
+        # What the run workflow asks before deciding whether to sweep first.
+        print(json.dumps({"age_minutes": pool_age_minutes(),
+                          "running": os.path.exists(LOCK)}))
+        raise SystemExit(0)
+
+    if not take_lock():
+        # Not an error: the sweep already under way is refreshing the same
+        # pool this one would have.
+        print("another sweep is already running - skipped", file=log)
+        if as_json:
+            print(json.dumps({"skipped": "already running", "fetched": 0,
+                              "new": 0, "sources": []}))
+        raise SystemExit(0)
+
     print("ingesting (%s sources)" % ("fast" if fast else "all"), file=log)
-    out = run(fast=fast, verbose=False)
+    try:
+        out = run(fast=fast, verbose=False)
+    finally:
+        os.unlink(LOCK)
 
     for s in out["sources"]:
         if s["error"]:
@@ -144,7 +227,6 @@ if __name__ == "__main__":
     print("  fetched          %6d" % out["fetched"], file=log)
     print("  new              %6d" % out["new"], file=log)
     print("  duplicates       %6d" % out["duplicates"], file=log)
-    print("  pruned (>60d)    %6d" % out["pruned"], file=log)
     print("  pool total       %6d  (%d with description)"
           % (out["pool"], out["with_description"]), file=log)
 
