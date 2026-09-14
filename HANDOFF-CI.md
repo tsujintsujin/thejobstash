@@ -1,7 +1,12 @@
 # HANDOFF-CI.md — put TheJobStash's deploys behind git
 
-**Status: not built. This is the task.**
-Written 2026-09-14. Read `CLAUDE.md` first, then this.
+**Status: superseded 2026-09-14.** Justin chose PC → GitHub → Cloudflare with
+no path from the PC at all. Built as Cloudflare **Workers Builds** connected to
+the repo (no API token anywhere), `npm run deploy` refuses, `predeploy.js`
+deleted, wrangler signed out on the PC, Google client id/secret moved to Worker
+secrets, and `prebuild` generates `cloudflare-env.d.ts` (gitignored; without it
+a clean checkout fails type-checking). `CLAUDE.md` "Running it" is current.
+The trap list below is kept for its reasoning.
 
 ---
 

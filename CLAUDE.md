@@ -178,7 +178,7 @@ fix-dns.cmd                  # only if DNS breaks (HANDOFF-CLOUDFLARE.md §7)
 ```bash
 npm run dev                  # cd web — localhost:3200, NO D1 binding
 npm run preview              # the real Worker runtime, with D1
-npm run deploy               # build + push to Cloudflare
+npm run deploy               # refuses on purpose — see below
 npm run d1:migrate           # apply web/migrations/ to D1
 ```
 
@@ -189,8 +189,16 @@ python test_matching.py      # 57 checks
 python test_cloudflare.py    # 40 checks — the D1 shim vs real sqlite3
 ```
 
-Deploys go **straight from this disk** via wrangler. There is no CI, no Vercel,
-and no git hook — committing does not deploy, and deploying does not commit.
+**Deploys go PC → GitHub → Cloudflare, never PC → Cloudflare.** Push to
+`master` on `tsujintsujin/thejobstash`; Cloudflare Workers Builds (connected to
+the repo, root `web/`) runs `npx opennextjs-cloudflare build` then
+`npx opennextjs-cloudflare deploy`. `npm run deploy` exits 1 so nobody ships
+code that is not on GitHub. Emergency undo is `npx wrangler rollback`, not a
+local deploy.
+
+Google sign-in's client id/secret are **Worker secrets** (set 2026-09-14), not
+`.env.local` — a build from GitHub has no `.env.local`. D1 migrations stay
+manual (`npm run d1:migrate`).
 
 ---
 
