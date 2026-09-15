@@ -19,9 +19,11 @@ export default function NavLinks({ signedIn }: { signedIn: boolean }) {
   if (signedIn) {
     return (
       <div className={ROW}>
-        <Link href="/dashboard" className="btn btn-paper btn-sm">
-          Dashboard
-        </Link>
+        {pathname !== "/dashboard" && (
+          <Link href="/dashboard" className="btn btn-paper btn-sm">
+            Dashboard
+          </Link>
+        )}
         <form action="/api/auth/logout" method="post">
           <button className="btn btn-sm" type="submit">
             Sign out

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { currentUser } from "@/lib/session";
-import { failRun, profileFor, startRun } from "@/lib/db";
+import { failRun, openRunFor, profileFor, startRun } from "@/lib/db";
 import { pyRun } from "@/lib/py";
 
 /**
@@ -29,6 +29,12 @@ export async function POST() {
 
   const runId = await startRun(user.id);
   if (!runId) {
+    if (await openRunFor(user.id)) {
+      return NextResponse.json(
+        { error: "Your resume is already running. It lands under Past digests when it finishes." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "You're out of credits. Buy a pack to run your resume again." },
       { status: 402 }

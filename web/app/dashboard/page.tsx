@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@/lib/session";
-import { deliveriesFor, profileFor } from "@/lib/db";
+import { deliveriesFor, openRunFor, profileFor } from "@/lib/db";
 import DigestPanel from "./DigestPanel";
 import DeleteDigest from "./DeleteDigest";
 import BuyCredits from "./BuyCredits";
@@ -29,9 +29,10 @@ export default async function Dashboard() {
 
   // Independent reads, so they go together rather than one after the other -
   // each is a network round trip to D1 now, not a local file read.
-  const [profile, deliveries] = await Promise.all([
+  const [profile, deliveries, openRun] = await Promise.all([
     profileFor(user.id),
     deliveriesFor(user.id),
+    openRunFor(user.id),
   ]);
   const parsed = profile ? JSON.parse(profile.profile_json) : null;
   const credits = user.credits ?? 0;
@@ -167,7 +168,7 @@ export default async function Dashboard() {
             inside DigestPanel labels itself, so this only has to restore the
             gap the head was providing. */}
         <div className="mt-[30px]">
-          <DigestPanel hasProfile={!!profile} credits={credits} />
+          <DigestPanel hasProfile={!!profile} credits={credits} openRun={openRun ?? null} />
         </div>
 
         {/* credits — sun only when the balance is empty, because that is when

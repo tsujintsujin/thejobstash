@@ -183,7 +183,14 @@ export async function startRun(userId: string) {
   const id = newId("run_");
   const now = nowIso();
   const [took] = await db().batch([
-    db().prepare("UPDATE users SET credits=credits-1 WHERE id=? AND credits>0").bind(userId),
+    // One run at a time: the credit is only taken while none is still open,
+    // inside the same batch, so two quick clicks cannot both get past it.
+    db()
+      .prepare(
+        "UPDATE users SET credits=credits-1 WHERE id=? AND credits>0 AND NOT EXISTS " +
+          "(SELECT 1 FROM runs WHERE user_id=? AND status IN ('queued','running'))"
+      )
+      .bind(userId, userId),
     db()
       .prepare(
         "INSERT INTO runs (id,user_id,status,created_at,updated_at) " +
@@ -214,6 +221,18 @@ export async function failRun(runId: string, error: string) {
       )
       .bind(error.slice(0, 500), nowIso(), runId),
   ]);
+}
+
+/** The run still in progress for this account, if any. The dashboard picks
+ *  its progress bar back up from this after a refresh or a fresh sign-in. */
+export async function openRunFor(userId: string) {
+  return db()
+    .prepare(
+      "SELECT id,status,created_at FROM runs WHERE user_id=? " +
+        "AND status IN ('queued','running') ORDER BY created_at DESC LIMIT 1"
+    )
+    .bind(userId)
+    .first<{ id: string; status: string; created_at: string }>();
 }
 
 export async function runFor(userId: string, runId: string) {
