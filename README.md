@@ -122,18 +122,16 @@ Both read `.env.cloudflare`, which is local-only and never committed.
 cd web
 npm install
 npm run dev                  # localhost:3200, Next's own dev server
-npm run preview              # the real Worker runtime, via workerd
+npm run d1:local             # create the local database's tables (web/.localdb)
 ```
-
-`npm run dev` does not have the D1 binding, so anything touching the database
-needs `npm run preview` instead — that runs the actual Worker.
 
 ### Deploying
 
+Push to `master` on GitHub. Cloudflare builds and deploys it; nothing is
+deployed from this PC, and `npm run deploy` refuses. A new file in
+`web/migrations/` is applied by hand in the Cloudflare dashboard's D1 console.
+
 ```bash
-cd web
-npm run deploy               # build + push the Worker
-npm run d1:migrate           # apply web/migrations/ to D1
 npm run migration:gen        # regenerate 0001_init.sql from db.py's SCHEMA
 ```
 
