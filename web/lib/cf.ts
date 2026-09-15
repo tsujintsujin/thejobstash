@@ -21,10 +21,10 @@ export type Env = {
   JOBSTASH_GOOGLE_STUB_ORIGIN?: string;
   /** PayMongo secret key - `wrangler secret put`, never in a file. */
   PAYMONGO_SECRET_KEY?: string;
-  /** Resend API key for sign-up codes - a secret. The same name mailer.py reads. */
-  JOBSTASH_RESEND_KEY?: string;
-  /** Sender, on a domain verified in Resend: `TheJobStash <noreply@thejobstash.com>`. */
-  JOBSTASH_FROM?: string;
+  /** Brevo API key for sign-up codes - a Worker secret, never in a file. */
+  JOBSTASH_BREVO_KEY?: string;
+  /** Sender address on the domain authenticated in Brevo. Defaults to noreply@thejobstash.com. */
+  JOBSTASH_FROM_EMAIL?: string;
 };
 
 export function env(): Env {
