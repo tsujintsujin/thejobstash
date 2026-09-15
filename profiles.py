@@ -211,6 +211,12 @@ class Profile:
     role_families: list = field(default_factory=list)
     # skill -> weight. Weight is how strongly it argues for them.
     strong_skills: dict = field(default_factory=dict)
+    # Skills the user switched off on the dashboard. Kept in strong_skills as
+    # stored so the dashboard can still list and re-enable them; dropped here
+    # in __post_init__ so every consumer of a loaded Profile - scoring,
+    # unshipped, family_skills - sees one already-filtered set rather than
+    # each having to remember the exclusion.
+    disabled_skills: list = field(default_factory=list)
     # Roles they would still clear even though the title is not a dev title.
     adjacent_hints: list = field(default_factory=list)
     min_skill_hits: int = 3
@@ -247,6 +253,18 @@ class Profile:
     strong_margin: int = 12           # strong = min_score + this
 
     def __post_init__(self):
+        if self.disabled_skills:
+            off = {s.lower() for s in self.disabled_skills}
+            self.strong_skills = {k: v for k, v in self.strong_skills.items()
+                                  if k.lower() not in off}
+            self.family_skills = [s for s in self.family_skills
+                                  if s.lower() not in off]
+        # A bar of three against two skills can never be cleared, so a run
+        # would burn a credit and return nothing. Holds for thin resumes too,
+        # not just switched-off skills.
+        if self.strong_skills:
+            self.min_skill_hits = min(self.min_skill_hits,
+                                      len(self.strong_skills))
         if not self.authorized_in:
             self.authorized_in = [COUNTRY_AUTH.get(self.home_country,
                                                    self.home_country)]

@@ -526,6 +526,7 @@ def profile_to_dict(p):
     return {
         "user_id": p.user_id, "role_families": p.role_families,
         "strong_skills": p.strong_skills, "adjacent_hints": p.adjacent_hints,
+        "disabled_skills": p.disabled_skills,
         "min_skill_hits": p.min_skill_hits,
         "years_experience": p.years_experience, "level": p.level,
         "home_country": p.home_country, "authorized_in": p.authorized_in,
