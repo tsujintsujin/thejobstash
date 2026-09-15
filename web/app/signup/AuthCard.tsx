@@ -377,9 +377,10 @@ export default function AuthCard({
           <form onSubmit={verify}>
             <p className={`${HINT} mb-3`}>{note}</p>
             <div className={FIELD}>
-              <label htmlFor="code">Code</label>
+              <label htmlFor="code" className="text-center">Code</label>
               <input
                 id="code"
+                type="text"
                 value={code}
                 required
                 autoFocus
