@@ -35,7 +35,9 @@ FAST_SOURCES = ["himalayas", "remoteok", "remotive", "arbeitnow", "jobicy",
                 "workingnomads", "themuse", "weworkremotely", "jobspresso",
                 "hackernews"]
 
-DESCRIPTION_LIMIT = 3000        # pruning is prune_jobs.py, its own n8n workflow
+DESCRIPTION_LIMIT = 3000
+# A posting no board has listed for this long is gone; every sweep drops it.
+PRUNE_DAYS = 30
 
 # One sweep at a time. Runs arrive whenever users press Run, and two sweeps of
 # 13 boards at once would double the load on the boards and race on the pool
@@ -68,8 +70,8 @@ def push_pool_stats(total, with_desc):
 
     This is the entire reason the pool ever needed to be reachable from the
     site. poolStats() used to run three aggregates across every row on every
-    render of the busiest page; now it reads one row that this writes once a
-    day. Best effort: a failed push costs a stale counter on the home page,
+    render of the busiest page; now it reads one row that this writes after
+    every sweep. Best effort: a failed push costs a stale counter on the home page,
     never an ingest.
     """
     try:
@@ -167,6 +169,12 @@ def run(fast=False, verbose=True):
         if verbose:
             print("  %-16s %5d fetched  %4d new" % (name, len(rows), added))
 
+    # Pruning is part of the sweep, not a job of its own on a timer. last_seen,
+    # not first_seen: a sweep bumps last_seen whenever a board still lists the
+    # job, so first_seen would drop postings that are still open.
+    pruned = conn.execute(
+        "DELETE FROM jobs WHERE last_seen < datetime('now', ?)",
+        ("-%d days" % PRUNE_DAYS,)).rowcount
     conn.commit()
     total = conn.execute("SELECT COUNT(*) c FROM jobs").fetchone()["c"]
     with_desc = conn.execute(
@@ -176,7 +184,7 @@ def run(fast=False, verbose=True):
 
     push_pool_stats(total, with_desc)
 
-    return {"fetched": fetched, "new": new, "duplicates": dupes,
+    return {"fetched": fetched, "new": new, "duplicates": dupes, "pruned": pruned,
             "pool": total, "with_description": with_desc,
             "sources": report}
 
@@ -227,6 +235,7 @@ if __name__ == "__main__":
     print("  fetched          %6d" % out["fetched"], file=log)
     print("  new              %6d" % out["new"], file=log)
     print("  duplicates       %6d" % out["duplicates"], file=log)
+    print("  pruned           %6d  (unlisted %d+ days)" % (out["pruned"], PRUNE_DAYS), file=log)
     print("  pool total       %6d  (%d with description)"
           % (out["pool"], out["with_description"]), file=log)
 

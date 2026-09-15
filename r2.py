@@ -17,7 +17,7 @@ otherwise fine - the email with the PDF attached has usually already gone, and
 that is the product. The row then keeps its local path and the dashboard's
 download answers 410, which is the honest answer.
 """
-import os, urllib.request, urllib.error
+import sys, os, urllib.request, urllib.error
 from urllib.parse import quote
 
 ORIGIN = os.environ.get("JOBSTASH_SITE_ORIGIN", "").rstrip("/")
@@ -54,17 +54,17 @@ def put(local_path, key, timeout=120):
             if 200 <= r.status < 300:
                 return "r2:" + key
     except (urllib.error.URLError, OSError) as e:
-        print("[r2] upload of %s failed: %s" % (key, e))
+        print("[r2] upload of %s failed: %s" % (key, e), file=sys.stderr)
     return None
 
 
-def put_digest(user_id, day, html_path, pdf_path):
-    """Upload a day's pair. Returns the paths to store on the delivery row.
+def put_digest(user_id, delivery_id, html_path, pdf_path):
+    """Upload one digest's pair. Returns the paths to store on the delivery row.
 
     Falls back to the local path for whichever half did not make it, so a
     partial failure still records where the file actually is.
     """
-    base = "%s/%s" % (user_id, day)
+    base = "%s/%s" % (user_id, delivery_id)
     return (
         put(html_path, base + ".html") or html_path,
         put(pdf_path, base + ".pdf") or pdf_path,

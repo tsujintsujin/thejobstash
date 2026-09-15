@@ -29,8 +29,8 @@ daily email, and nothing runs on a schedule for a user.**
 packs of 3 / 5 / 12 cost ₱99 / ₱149 / ₱299 through PayMongo (QR Ph). **Test
 pricing is on: every pack charges ₱1** (`web/lib/packs.ts` `TEST_PRICE_PHP`).
 
-Verified 2026-09-14: 10,194 jobs / 13 sources · `test_matching.py` 57/57 ·
-`test_cloudflare.py` 40/40.
+Verified 2026-09-16: 11,879 jobs / 13 sources · `test_matching.py` 61/61 ·
+`test_cloudflare.py` 39/39.
 
 ---
 
@@ -80,20 +80,20 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Which blockers a user is allowed to see | `matching.py:60 SHOWABLE_BLOCKERS` |
 | How many jobs a digest holds | `delivery.py:31` — `TARGET = 20`, `FLOOR = 8` |
 | Near-miss quota | `delivery.py:33` — `NEAR_MIN, NEAR_MAX = 5, 10` |
-| Backlog reach on a first run | `delivery.py POOL_DAYS = 60` |
+| How far back postings are scored | `delivery.py POOL_DAYS = 60` |
 | Assembling one run's digest | `delivery.py build_digest()` |
 | Prices, pack sizes, the ₱1 test price | `web/lib/packs.ts` — the only place prices live |
 | The free credit | `users.credits DEFAULT 1`, `web/migrations/0003_credits.sql` (copy reads `FREE_CREDITS`) |
 | Taking a credit for a run, race-safe | `web/lib/db.ts startRun()`, called by `/api/deliver` |
 | Refunding a failed run, once | `web/lib/db.ts failRun()` · `run_delivery.py fail_run()` · 45-min stale sweep in `/api/runs/[id]` |
-| Sweep first, or score now and sweep after | `n8n/build_saas_workflow.py FRESH_MINUTES = 30` · `ingest.py --age` · `ingest.lock` |
+| Score the pool as it stands; sweep after if 30+ min old (empty pool only: sweep first) | `n8n/build_saas_workflow.py FRESH_MINUTES = 30` · `ingest.py --age` · `ingest.lock` |
 | Opening a digest (modal, View, PDF) | `web/app/api/download/[id]/route.ts` — one route, reached from `DigestPanel`'s ready-modal and the Past digests rows |
 | Making a QR Ph code / turning a payment into credits | `web/lib/paymongo.ts createQr()` / `settle()` via `/api/pay`, `/api/pay/[id]` (the buy modal polls it), `/api/pay/webhook` |
 | Which payment methods are offered | QR Ph only, shown in our own modal (`web/app/dashboard/BuyCredits.tsx`). GCash and cards, once PayMongo approves them, need their own flows |
 | Resume file to Profile | `resume_parse.py` |
 | A user as data | `profiles.py` |
 | Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards) |
-| Schema | `db.py` — `jobs users profiles payments runs sent_jobs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/` |
+| Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/` |
 
 `api_bridge.py` is the JSON contract between the site and the Python; the
 commands are `parse`, `profile`, `preview`, `deliver`, `stats`.
@@ -153,9 +153,9 @@ D:\AIO Freelance\n8n\                 build_saas_workflow.py +
                                       the run workflow: webhook, no schedule.
                                       ingest.py --age / --json, run_delivery.py
                                       --json --user <id> --run <run_id>
-                                      build_prune_workflow.py +
-                                      workflows/jobstash-prune.json
-                                      separate, 06:30: prune_jobs.py --json
+                                      Pruning (jobs unlisted 30+ days) is part
+                                      of every sweep in ingest.py - there is no
+                                      separate prune job or schedule.
 ```
 
 Neither is under version control. **The workflow that actually runs a resume
@@ -187,9 +187,8 @@ and `d1:seed` were removed 2026-09-15; the PC's wrangler is logged out.
 
 ```bash
 python ingest.py --fast      # refill the pool -> D1
-python prune_jobs.py         # delete jobs no board has listed for 30 days
-python test_matching.py      # 57 checks
-python test_cloudflare.py    # 40 checks — the D1 shim vs real sqlite3
+python test_matching.py      # 61 checks
+python test_cloudflare.py    # 39 checks — the D1 shim vs real sqlite3
 ```
 
 **Deploys go PC → GitHub → Cloudflare, never PC → Cloudflare.** Push to

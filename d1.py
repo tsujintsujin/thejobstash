@@ -66,9 +66,9 @@ class Connection:
 
     There is no transaction to manage: every D1 request commits on its own, so
     `commit()` is a no-op kept only so callers do not have to care which
-    backend they hold. That is a real behaviour difference from the local file
-    and it is the reason `build_digest` must stay ordered so a crash mid-way
-    leaves the worst case as a duplicate-free partial write, not a torn one.
+    backend they hold. That is a real behaviour difference from the local file:
+    a crash mid-run leaves whatever was already written, not a rolled-back
+    transaction.
     """
 
     def __init__(self, origin, token, timeout=60):
@@ -130,8 +130,8 @@ class Connection:
         if not seq:
             return Cursor([], 0)
         # One request carrying every statement, not one request per row.
-        # `mark_sent` can hand this thirty pairs and thirty round-trips to
-        # Cloudflare from a home connection is seconds of wall clock.
+        # Thirty rows as thirty round-trips to Cloudflare from a home
+        # connection is seconds of wall clock.
         changes = 0
         for chunk in _chunks(seq, 50):
             body = [{"sql": sql, "params": [_bind(p) for p in row]} for row in chunk]

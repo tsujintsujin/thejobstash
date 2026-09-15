@@ -84,7 +84,7 @@ if os.path.exists(mig):
     sql = io.open(mig, encoding="utf-8").read()
     # The migration is generated from SCHEMA; if someone edits one and not the
     # other, the tables stop matching and D1 silently lacks a column.
-    for t in ("jobs", "users", "profiles", "sent_jobs",
+    for t in ("jobs", "users", "profiles",
               "deliveries", "trial_runs", "sessions"):
         check("migration creates %s" % t,
               ("CREATE TABLE IF NOT EXISTS %s" % t) in sql, True)

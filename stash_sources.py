@@ -65,7 +65,7 @@ def onlinejobs():
     """The board hides the employer, so the job's own id stands in for it.
     ingest fingerprints on company + title; a constant company merged every
     "Virtual Assistant" from different employers into one row."""
-    # ponytail: 4 views x 300 rows reaches ~1-2 days back. If a daily run
+    # ponytail: 4 views x 300 rows reaches ~1-2 days back. If a sweep
     # starts missing posts, split further by skill_tags.
     views = ("", "fullTime=on", "partTime=on", "gig=on")
     out, seen = [], set()
@@ -110,12 +110,12 @@ def onlinejobs():
 def jobstreet(known=frozenset()):
     """Every remote ad on JobStreet PH. The search API only returns a teaser,
     so the full ad is fetched per job - but only for URLs not in `known`
-    (ads already stored with a full description), so after the first runs
-    each day only pays for its new ads."""
+    (ads already stored with a full description), so after the first sweeps
+    each one only pays for its new ads."""
     from playwright.sync_api import sync_playwright
 
     # ponytail: ~0.6s per ad. 7,000 ads would be over an hour, so the first
-    # runs backfill 1,500 a day instead. Raise it if a run has time to spare.
+    # sweeps backfill 1,500 at a time instead. Raise it if a run has time to spare.
     DETAIL_CAP = 1500
 
     out, seen, budget = [], set(), DETAIL_CAP

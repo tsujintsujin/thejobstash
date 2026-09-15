@@ -12,8 +12,8 @@ import { env, envVar } from "@/lib/cf";
  */
 const MAX_BYTES = 16 * 1024 * 1024;
 
-/** Keys are `<user_id>/<day>.<ext>` and nothing else is accepted. */
-const KEY = /^usr_[0-9a-f]{16}\/\d{4}-\d{2}-\d{2}\.(html|pdf)$/;
+/** Keys are `<user_id>/<delivery_id>.<ext>` and nothing else is accepted. */
+const KEY = /^usr_[0-9a-f]{16}\/dlv_[0-9a-f]{16}\.(html|pdf)$/;
 
 function authorised(req: NextRequest) {
   const expected = envVar("JOBSTASH_PY_TOKEN");

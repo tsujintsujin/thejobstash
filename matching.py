@@ -21,7 +21,7 @@ score() in four ways that matter:
      straight through. That is fixed here.
 
   4. Exactly one check still excludes outright - role family. A nursing
-     vacancy is not a near-miss for a developer, and padding a thin day with
+     vacancy is not a near-miss for a developer, and padding a thin run with
      those is what would genuinely make the product look lazy.
 
 Tone rule, enforced by convention in every Blocker.detail written below: the

@@ -103,9 +103,9 @@ def _shape(digest):
 
 
 def cmd_preview(user_id):
-    """Score without consuming anything - dry_run keeps sent_jobs untouched."""
+    """Score without consuming anything."""
     conn = db.init()
-    d = delivery.build_digest(conn, user_id, dry_run=True)
+    d = delivery.build_digest(conn, user_id)
     conn.close()
     if "error" in d:
         out({"ok": False, "error": d["error"]})

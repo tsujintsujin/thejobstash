@@ -31,8 +31,6 @@ FROM_ADDR = os.environ.get("JOBSTASH_FROM", "TheJobStash <digest@thejobstash.loc
 
 def subject_for(summary):
     n = summary["matches"]
-    if summary["first_ever"]:
-        return "Your first sweep: %d matches" % n
     if summary["thin"]:
         return "A quiet run - %d match%s, and what came close" % (
             n, "" if n == 1 else "es")

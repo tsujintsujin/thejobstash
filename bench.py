@@ -11,7 +11,7 @@ consuming anything.
 
 Reuses db.init(), delivery._rows_for() and matching.score_many() rather than
 reimplementing any of it, so what this prints is what a real digest would see.
-Nothing is written: no sent_jobs, no deliveries, no profile row.
+Nothing is written: no deliveries, no profile row.
 """
 import argparse, json, os, sys
 

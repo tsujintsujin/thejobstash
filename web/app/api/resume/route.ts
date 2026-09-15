@@ -47,11 +47,6 @@ export async function POST(req: NextRequest) {
     const profile = { ...res.profile, user_id: user.id };
     await saveProfile(user.id, file.name, res.resume_text || "", JSON.stringify(profile));
 
-    // A new resume means a different person as far as scoring is concerned, so
-    // the "already shown you this" history is cleared. Otherwise a career
-    // switcher would be silently denied every job their old profile had seen.
-    await db().prepare("DELETE FROM sent_jobs WHERE user_id=?").bind(user.id).run();
-
     return NextResponse.json({
       ok: true,
       diagnostics: res.diagnostics,
@@ -68,9 +63,6 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
-  await db().batch([
-    db().prepare("DELETE FROM profiles WHERE user_id=?").bind(user.id),
-    db().prepare("DELETE FROM sent_jobs WHERE user_id=?").bind(user.id),
-  ]);
+  await db().prepare("DELETE FROM profiles WHERE user_id=?").bind(user.id).run();
   return NextResponse.json({ ok: true });
 }
