@@ -63,8 +63,8 @@ also needs n8n; `scorer.cmd` starts py_server, the tunnel and n8n). Everything
 else is pure Cloudflare and does not care if it is off; those two then say "the
 scorer is offline" by design, and a run that cannot start hands its credit back.
 
-`npm run dev` has **no D1 binding**. Anything touching the database needs
-`npm run preview`.
+`npm run dev` runs against a local D1 in `web/.localdb` (tables from
+`npm run d1:local`, no jobs). It never touches the live database.
 
 ---
 
@@ -176,11 +176,13 @@ fix-dns.cmd                  # only if DNS breaks (HANDOFF-CLOUDFLARE.md §7)
 ```
 
 ```bash
-npm run dev                  # cd web — localhost:3200, NO D1 binding
-npm run preview              # the real Worker runtime, with D1
+npm run dev                  # cd web — localhost:3200, local D1 in .localdb
+npm run d1:local             # create the local D1's tables
 npm run deploy               # refuses on purpose — see below
-npm run d1:migrate           # apply web/migrations/ to D1
 ```
+
+No command on this PC changes anything on Cloudflare. `preview`, `d1:migrate`
+and `d1:seed` were removed 2026-09-15; the PC's wrangler is logged out.
 
 ```bash
 python ingest.py --fast      # refill the pool -> D1
@@ -196,12 +198,13 @@ the repo, root `web/`) runs `npx opennextjs-cloudflare build` then
 "Cloudflare Workers and Pages" is installed on `tsujintsujin` for this one repo
 only; preview builds are off; Cloudflare holds its own build token ("Workers
 Builds - 2026-09-14 20:45"). `npm run deploy` exits 1 so nobody ships
-code that is not on GitHub. Emergency undo is `npx wrangler rollback`, not a
-local deploy.
+code that is not on GitHub. Emergency undo is the Cloudflare dashboard
+(Worker → Deployments → roll back), not a local deploy.
 
 Google sign-in's client id/secret are **Worker secrets** (set 2026-09-14), not
-`.env.local` — a build from GitHub has no `.env.local`. D1 migrations stay
-manual (`npm run d1:migrate`).
+`.env.local` — a build from GitHub has no `.env.local`. A new file in
+`web/migrations/` is **not** applied by a deploy: run its SQL in the Cloudflare
+dashboard's D1 console for `jobstash`, then check `d1_migrations`.
 
 ---
 
@@ -229,9 +232,9 @@ manual (`npm run d1:migrate`).
   succeeded (warm vs cold isolates). Low traffic means isolates are almost
   always cold, so it does not heal on its own. **Never make a page do work
   proportional to the pool size.**
-- **`npm run preview` has an empty local D1** — no `jobs` table, so `/` and
-  `/signup` 500 locally while `/privacy` works. That is the preview, not a
-  bug. Do not debug production symptoms against it.
+- **The local D1 has no jobs** — its `pool_stats` row is zeros, so the local
+  home page shows 0 postings. That is the local copy, not a bug. Do not debug
+  production symptoms against it.
 - **Don't run `next build` while the dev server is live** — both write `.next`
   and every route 500s.
 - **Port 3200 sticks.** Find it with `netstat -ano`, then
