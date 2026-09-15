@@ -9,6 +9,7 @@ structural:
 | `HANDOFF.md` | Why the product is shaped this way. The scoring model, the delivery shape, the free-trial paywall, Google sign-in's security rules, measured data, 12 fixed bugs. **Still current** — the migration changed none of it. |
 | `HANDOFF-CLOUDFLARE.md` | Where it runs now. D1, Workers, the tunnel, what is deployed and what is left. |
 | `SPEC-CAPABILITY-PARSER.md` | **Draft, not built.** Reworking `resume_parse.py` from keyword-matching to evidence-based understanding, so the product works for any profession rather than developers. Read before touching the parser. |
+| `HANDOFF-DEPLOY-EMAIL.md` | 2026-09-14/15: moving deploys behind GitHub, removing every PC → Cloudflare path, the Google popup fix, Brevo email + DNS. Hurdles, fixes, and what to do better. |
 | `PLAN-REBUILD.md` | **Draft, not built.** The eight-phase implementation plan for that spec plus the move from time-boxed plans to credits. Each phase has an exit test. **Phases 7–8 were settled and built 2026-09-14:** credits replace plans and the daily digest is gone. |
 
 Anything in `HANDOFF.md` about Supabase, "no tunnel", or the 1,760-job pool is
@@ -216,7 +217,7 @@ dashboard's D1 console for `jobstash`, then check `d1_migrations`.
 | Scorer dies with its window | No scheduled task, no `cloudflared` or n8n service. Both need elevation. Must be fixed **before the first paying customer**: while it is down nobody can spend credits they paid for. Failed starts are refunded, but that is not a product. |
 | R2 not enabled | `r2_buckets` is commented out at `web/wrangler.jsonc:49`. Only affects the dashboard's "download a past digest" button; the emailed PDF is unaffected. Needs a terms acceptance — Justin's call. |
 | ~~Google sign-in~~ **working** | Live and verified end to end 2026-09-12 (linked, not duplicated). The credentials reach production by Next **inlining `.env.local` at build time**, not as Cloudflare secrets — so `wrangler secret list` shows nothing and rotating them needs a rebuild. Worth moving to `wrangler secret put` eventually. `JOBSTASH_GOOGLE_REDIRECT_URI` is now a var in `wrangler.jsonc`; without it `googleRedirectUri()` silently falls back to `http://localhost:3200/...` and every production sign-in dies on `redirect_uri_mismatch`. |
-| Real email (Resend) | Still writes `.eml` to `outbox/`. **No DMARC record exists** on the domain — add one before mailing strangers. |
+| Email | **Sign-up codes: live via Brevo** since 2026-09-15 (`web/lib/mail.ts`, Worker secret `JOBSTASH_BREVO_KEY`, sender `noreply@thejobstash.com`, domain authenticated, DMARC `p=none`). Digest mail (`mailer.py`) still references Resend and writes `.eml` to `outbox/`. See `HANDOFF-DEPLOY-EMAIL.md`. |
 | Payments | PayMongo, account TSUJIN IT SOLUTIONS. **QR Ph only**: GCash and cards read "Available after your upgrade" pending PayMongo's business-type review; they will need their own flows when approved. `TEST_PRICE_PHP = 1`. Live since 2026-09-14 (Worker version e0d876a4): `PAYMONGO_SECRET_KEY` is a Worker secret, and PayMongo webhook `hook_Hgs5ouGaoTEqCtMwyUhUQMfw` posts `payment.paid` to `https://thejobstash.com/api/pay/webhook`. |
 
 ---
