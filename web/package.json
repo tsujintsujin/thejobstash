@@ -7,13 +7,10 @@
     "prebuild": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "build": "next build",
     "start": "next start -p 3200",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "echo Deploys come from GitHub: push to master and Cloudflare builds it. && exit 1",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "migration:gen": "python scripts/gen_migration.py",
-    "d1:migrate": "wrangler d1 migrations apply jobstash --remote",
-    "d1:local": "wrangler d1 migrations apply jobstash --local",
-    "d1:seed": "python scripts/export_for_d1.py && wrangler d1 execute jobstash --remote --file=seed.sql"
+    "d1:local": "wrangler d1 migrations apply jobstash --local --persist-to .localdb"
   },
   "dependencies": {
     "next": "^15.1.6",

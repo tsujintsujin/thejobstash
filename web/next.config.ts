@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
 
-// Gives `next dev` the Worker's bindings (a local D1 under .wrangler/), so
+// Gives `next dev` the Worker's bindings (a local D1 under .localdb/), so
 // pages that read the database render locally instead of throwing. Run
 // `npm run d1:local` once to create its tables.
-initOpenNextCloudflareForDev();
+initOpenNextCloudflareForDev({ persist: { path: ".localdb/v3" } });
 
 const nextConfig: NextConfig = {
   eslint: { ignoreDuringBuilds: true },
