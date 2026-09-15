@@ -53,9 +53,9 @@ BLOCKER_LABEL = {
 # Descending intensity, which is the whole point of the ordering: jade is the
 # one you act on, coral is the one you cannot.
 SECTION_STYLE = {
-    "strong":       (JADE,   "Strong matches",  "Worth applying to today."),
+    "strong":       (JADE,   "Strong matches",  "Apply to these first."),
     "worth_a_look": (SUN,    "Worth a look",    "Solid fits with a caveat or two."),
-    "stretch":      (PAPER,  "Stretch",         "Below your usual bar - shown because the day was quiet."),
+    "stretch":      (PAPER,  "Stretch",         "Below your usual bar - shown because the run was quiet."),
     "near_miss":    (CORAL,  "Came close",      "Real roles that matched your work but were blocked by one thing."),
 }
 
@@ -223,11 +223,7 @@ def digest_html(digest, email=""):
     sec = digest["sections"]
     total = sum(len(sec[k]) for k in ("strong", "worth_a_look", "stretch"))
 
-    if s["first_ever"]:
-        lede = ("This is your first sweep, so it reaches back over everything "
-                "still live. From here each run brings what is new, and "
-                "nothing you have already seen.")
-    elif s["thin"]:
+    if s["thin"]:
         lede = ("A quiet run. Rather than pad this out with roles that do not "
                 "fit, here is everything that genuinely did - plus what came "
                 "close and why.")
@@ -254,12 +250,6 @@ def digest_html(digest, email=""):
              lede, total, JADE, len(sec["strong"]),
              len(sec["near_miss"]))]
 
-    if s["backfilled"]:
-        parts.append('<div class="note">%d of these were held back from '
-                     'earlier sweeps so today would not come up short. '
-                     '%d still in reserve.</div>'
-                     % (s["backfilled"], s["reserve_left"]))
-
     for key in ("strong", "worth_a_look", "stretch", "near_miss"):
         rows = sec.get(key) or []
         if not rows:
@@ -285,13 +275,17 @@ def digest_html(digest, email=""):
     return "".join(parts)
 
 
-def write_digest(digest, user_id, email="", out_dir=None):
-    """Write the HTML and print a PDF beside it. Returns (html, pdf|None)."""
+def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
+    """Write the HTML and print a PDF beside it. Returns (html, pdf|None).
+
+    Named by delivery id, never by date: a second run on the same date would
+    otherwise overwrite the first run's files.
+    """
     out_dir = out_dir or OUT_DIR
     os.makedirs(out_dir, exist_ok=True)
-    stamp = digest["summary"]["day"]
     safe = re.sub(r"[^A-Za-z0-9_-]", "", user_id)[:24] or "user"
-    base = os.path.join(out_dir, "digest-%s-%s" % (safe, stamp))
+    dlv = re.sub(r"[^A-Za-z0-9_-]", "", delivery_id)[:32]
+    base = os.path.join(out_dir, "digest-%s-%s" % (safe, dlv))
 
     html_path = base + ".html"
     with open(html_path, "w", encoding="utf-8") as fh:
@@ -330,8 +324,7 @@ def _selfcheck():
                   B("seniority", "Wants 8+ years")])
     empty = {"strong": [], "worth_a_look": [], "stretch": [], "near_miss": [m]}
     out = digest_html({"sections": empty, "summary": {
-        "day": "2026-01-01", "pool_size": 10, "scored": 10, "backfilled": 0,
-        "reserve_left": 0, "first_ever": False, "thin": False,
+        "day": "2026-01-01", "pool_size": 10, "scored": 10, "thin": False,
         "blocker_copy": []}})
 
     for kind, label in (("geography", "Location"), ("seniority", "Experience")):

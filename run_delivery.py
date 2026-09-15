@@ -31,12 +31,16 @@ def log(msg):
 
 
 def deliver_one(conn, user_id, email, dry=False):
-    digest = delivery.build_digest(conn, user_id, dry_run=dry)
+    digest = delivery.build_digest(conn, user_id)
     if "error" in digest:
         return {"user_id": user_id, "email": email, "error": digest["error"]}
 
     s = digest["summary"]
-    html_path, pdf_path = render.write_digest(digest, user_id, email)
+    # The id is minted first because everything is named by it: the files and
+    # the R2 keys, so two runs on the same date never overwrite each other, and
+    # the dashboard's /api/download/<id> link, the one way to open a digest.
+    dlv_id = db.new_id("dlv_")
+    html_path, pdf_path = render.write_digest(digest, user_id, dlv_id, email)
 
     status, detail = "skipped", "dry run"
     if not dry:
@@ -50,13 +54,9 @@ def deliver_one(conn, user_id, email, dry=False):
     # leaves the local path and costs a download button, not a delivery.
     stored_html, stored_pdf = html_path, pdf_path
     if not dry and r2.configured():
-        stored_html, stored_pdf = r2.put_digest(user_id, s["day"],
+        stored_html, stored_pdf = r2.put_digest(user_id, dlv_id,
                                                 html_path, pdf_path)
 
-    # The id is minted before the insert because the caller needs it: the
-    # dashboard's "view your stash" link is /api/download/<id>, the same route
-    # the Past digests row uses, so there is one way to open a digest.
-    dlv_id = db.new_id("dlv_")
     if not dry:
         conn.execute(
             "INSERT INTO deliveries (id,user_id,day,matches,near_misses,"
@@ -70,8 +70,6 @@ def deliver_one(conn, user_id, email, dry=False):
             "delivery_id": None if dry else dlv_id,
             "matches": s["matches"],
             "near_misses": s["near_misses"], "thin": s["thin"],
-            "backfilled": s["backfilled"], "reserve_left": s["reserve_left"],
-            "first_ever": s["first_ever"],
             "html": html_path, "pdf": pdf_path,
             "email_status": status, "email_detail": detail}
 
@@ -161,12 +159,12 @@ def main():
     else:
         log("  %-28s ERROR %s" % (r.get("email") or args.user, r["error"]))
 
-    doc = {"day": db.today_iso(), "run_id": args.run, "ok": ok, "result": r,
+    doc = {"run_id": args.run, "ok": ok, "result": r,
            "pool": pool, "dry_run": args.dry}
     if args.json:
         print(json.dumps(doc, indent=2))
     else:
-        print(json.dumps({k: doc[k] for k in ("day", "run_id", "ok", "pool")}))
+        print(json.dumps({k: doc[k] for k in ("run_id", "ok", "pool")}))
     return 0 if ok else 1
 
 

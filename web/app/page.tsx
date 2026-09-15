@@ -58,7 +58,7 @@ const STEPS = [
     n: "04",
     bg: "bg-ink text-bone",
     h: "You get the list",
-    p: "A short digest the moment your run finishes. Never the same job twice.",
+    p: "A short digest the moment your run finishes: your best matches, and what blocked the rest.",
   },
 ];
 
@@ -69,15 +69,15 @@ const FAQ = [
   ],
   [
     "How do credits work?",
-    "One credit is one run: we sweep the boards, score every posting against your resume and hand you the digest. Every account starts with one free. After that you buy a pack of 3, 5 or 12 through PayMongo. No subscription, nothing recurring, and credits don't expire.",
+    "One credit is one run: we score every posting in the pool against your resume and hand you the digest. The pool is re-swept from the boards whenever it is more than 30 minutes old. Every account starts with one free. After that you buy a pack of 3, 5 or 12 through PayMongo. No subscription, nothing recurring, and credits don't expire.",
   ],
   [
     "What does 'came close' mean?",
-    "Roles that matched your actual work but were blocked by exactly one thing — the wrong country, a timezone window, a couple of years too many. We show them with the reason attached, because a quiet day where you can see what's in the way is more useful than a short list with no explanation.",
+    "Roles that matched your actual work but were blocked by exactly one thing — the wrong country, a timezone window, a couple of years too many. We show them with the reason attached, because a quiet run where you can see what's in the way is more useful than a short list with no explanation.",
   ],
   [
     "Will I get the same jobs over and over?",
-    "No. Every job you've been shown is recorded against your account, so your fourth run never repeats your first. If a run comes up thin, we backfill from good matches we deliberately held back earlier rather than resending something you've seen.",
+    "Only while they're still your best matches. Every run scores the whole pool against your resume from scratch, so a strong role that's still listed stays in your digest, and new postings take its place as soon as they score higher.",
   ],
   [
     "What if a run turns up nothing good?",
@@ -324,9 +324,9 @@ export default async function Home() {
                 </p>
               </div>
               <div className="card bg-ink text-bone">
-                <b className="text-[30px] tracking-[-0.03em]">0</b>
+                <b className="text-[30px] tracking-[-0.03em]">~10</b>
                 <p className="text-sm font-bold mt-1">
-                  repeated from an earlier run
+                  came close, with the reason attached
                 </p>
               </div>
             </div>

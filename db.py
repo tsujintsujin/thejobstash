@@ -14,13 +14,15 @@ connection-string change and not a rewrite:
 WAL is on because two processes touch this file: the Python worker writes jobs
 and deliveries, the Next.js app reads them and writes users.
 
-The four tables are the ones the architecture discussion settled on:
+The core tables:
 
   jobs          the shared pool, scraped once, read by every user
   profiles      one per user - the thing JobHunt/profile.py hard-codes
   payments      PayMongo credit-pack checkouts (credits live on users)
-  sent_jobs     what each user has already been shown, so day 4 never repeats
-                day 1. This is the only piece JobHunt has no equivalent of.
+  runs          one per credit spent; deliveries is what each run produced
+
+Nothing records which jobs a user has been shown. Every run scores the whole
+pool fresh; there is no per-day or per-user history to filter against.
 """
 import os, sqlite3, json, hashlib, secrets, datetime, io, re, sys
 
@@ -174,22 +176,12 @@ CREATE TABLE IF NOT EXISTS runs (
 );
 CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id, created_at);
 
--- Every job ever shown to a user, so a later run never repeats an earlier one.
--- The dedupe that JobHunt does globally with its `reported` flag, per-user.
-CREATE TABLE IF NOT EXISTS sent_jobs (
-    user_id       TEXT NOT NULL,
-    fp            TEXT NOT NULL,
-    section       TEXT NOT NULL,        -- match | near_miss
-    sent_at       TEXT NOT NULL,
-    PRIMARY KEY (user_id, fp)
-);
-
 -- One digest. Rendered files live on disk; this is the index the dashboard
 -- reads, and the record that a paid run was actually delivered.
 CREATE TABLE IF NOT EXISTS deliveries (
     id            TEXT PRIMARY KEY,
     user_id       TEXT NOT NULL REFERENCES users(id),
-    day           TEXT NOT NULL,        -- YYYY-MM-DD
+    day           TEXT NOT NULL,        -- YYYY-MM-DD, a display label only
     matches       INTEGER NOT NULL DEFAULT 0,
     near_misses   INTEGER NOT NULL DEFAULT 0,
     html_path     TEXT,
@@ -230,7 +222,7 @@ CREATE TABLE IF NOT EXISTS signup_codes (
     created_at    TEXT NOT NULL
 );
 
--- Three numbers the home page shows, written by ingest.py once a day.
+-- Three numbers the home page shows, written by ingest.py after every sweep.
 -- The page used to compute these with three aggregates over every row in
 -- jobs, on every render. That is the most expensive thing on the busiest
 -- page, and it is why the pool had to live on Cloudflare at all - the site
@@ -360,20 +352,6 @@ def get_profile(conn, user_id):
     r = conn.execute("SELECT profile_json FROM profiles WHERE user_id=?",
                      (user_id,)).fetchone()
     return json.loads(r["profile_json"]) if r else None
-
-
-def already_sent(conn, user_id):
-    return {r["fp"] for r in conn.execute(
-        "SELECT fp FROM sent_jobs WHERE user_id=?", (user_id,))}
-
-
-def mark_sent(conn, user_id, pairs):
-    """pairs: iterable of (fp, section)."""
-    stamp = now_iso()
-    conn.executemany(
-        "INSERT OR IGNORE INTO sent_jobs (user_id,fp,section,sent_at) "
-        "VALUES (?,?,?,?)",
-        [(user_id, fp, section, stamp) for fp, section in pairs])
 
 
 if __name__ == "__main__":

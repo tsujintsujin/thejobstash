@@ -18,6 +18,7 @@ LOOP A  keep the pool fresh      this PC · n8n · SWR: every 30 min and/or when
   3. SAVE     same company+title -> bump last_seen · new -> insert
   4. COUNTS   push the 3 home-page numbers to D1 (pool_stats)
 
+> **Superseded 2026-09-16:** there is no separate prune job. `ingest.py` prunes jobs unlisted for 30 days as part of every sweep; `prune_jobs.py` and its 06:30 workflow were removed.
 LOOP A2 cleanup                  this PC · separate n8n workflow · 06:30 daily
   delete jobs no board has listed for 30 days               (prune_jobs.py, DONE)
 
@@ -152,6 +153,7 @@ Also run `test_matching.py` and `test_cloudflare.py`; both must still pass.
 
 That work belongs to the other chat. What it needs to know from this side:
 
+> **Superseded 2026-09-16:** there is no separate prune job. `ingest.py` prunes jobs unlisted for 30 days as part of every sweep; `prune_jobs.py` and its 06:30 workflow were removed.
 1. **`ingest.py` no longer deletes anything.** Cleanup is `prune_jobs.py` in its
    own workflow. Don't add it back to the scrape.
 2. **Overlap: already handled** (`ingest.lock`, a second run exits 0 with

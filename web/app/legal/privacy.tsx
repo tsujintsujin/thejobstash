@@ -13,7 +13,7 @@ import {
  * a template. Every claim below is one somebody could check by reading the
  * source, which is the only kind worth making:
  *
- *   db.py SCHEMA            users / profiles / sessions / sent_jobs /
+ *   db.py SCHEMA            users / profiles / sessions /
  *                           deliveries / runs / payments
  *   api/resume/route.ts     temp file, unlinked in `finally`; text is kept
  *   lib/session.ts          the one cookie, httpOnly + lax + secure
@@ -73,8 +73,8 @@ export const PRIVACY: Section[] = [
             ],
             ["Your resume", "in the form described in the next section."],
             [
-              "What has already been sent to you",
-              "which jobs appeared in your digests, so a later run never repeats an earlier one; plus the date, the match and near-miss counts, and whether the email went out.",
+              "Your digests",
+              "the date of each digest, its match and near-miss counts, and whether the email went out.",
             ],
             [
               "Your credits and purchases",
@@ -314,7 +314,7 @@ export const PRIVACY: Section[] = [
           rows={[
             [
               "Replace your resume yourself",
-              "uploading a new one from the dashboard overwrites the stored text, the derived profile and the record of what you have already been shown. The old version is not kept alongside it.",
+              "uploading a new one from the dashboard overwrites the stored text and the derived profile. The old version is not kept alongside it.",
             ],
             [
               "Delete your resume, or the whole account",
