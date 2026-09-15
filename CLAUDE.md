@@ -84,8 +84,9 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Assembling one run's digest | `delivery.py build_digest()` |
 | Prices, pack sizes, the ₱1 test price | `web/lib/packs.ts` — the only place prices live |
 | The free credit | `users.credits DEFAULT 1`, `web/migrations/0003_credits.sql` (copy reads `FREE_CREDITS`) |
-| Taking a credit for a run, race-safe | `web/lib/db.ts startRun()`, called by `/api/deliver` |
-| Refunding a failed run, once | `web/lib/db.ts failRun()` · `run_delivery.py fail_run()` · 45-min stale sweep in `/api/runs/[id]` |
+| Taking a credit for a run, race-safe | `web/lib/db.ts startRun()`, called by `/api/deliver` — takes the credit only while that account has no open run, in the same batch, so one account runs once at a time |
+| Showing a run in progress | `web/lib/db.ts openRunFor()` → `dashboard/page.tsx` → `DigestPanel`'s bar. Server-side, so a refresh or a fresh sign-in resumes it instead of offering a second run |
+| Refunding a failed run, once | `web/lib/db.ts failRun()` · `run_delivery.py fail_run()` · the workflow's **Fail the run** node (`run_delivery.py --fail`) · 45-min stale sweep in `/api/runs/[id]`, the last resort for when this machine is gone entirely |
 | Sweep first, or score now and sweep after | `n8n/build_saas_workflow.py FRESH_MINUTES = 30` · `ingest.py --age` · `ingest.lock` |
 | Opening a digest (modal, View, PDF) | `web/app/api/download/[id]/route.ts` — one route, reached from `DigestPanel`'s ready-modal and the Past digests rows |
 | Making a QR Ph code / turning a payment into credits | `web/lib/paymongo.ts createQr()` / `settle()` via `/api/pay`, `/api/pay/[id]` (the buy modal polls it), `/api/pay/webhook` |
@@ -153,6 +154,15 @@ D:\AIO Freelance\n8n\                 build_saas_workflow.py +
                                       the run workflow: webhook, no schedule.
                                       ingest.py --age / --json, run_delivery.py
                                       --json --user <id> --run <run_id>
+                                      No node may end the run early: each
+                                      one continues on error so every failure
+                                      reaches the Fail the run node, which is
+                                      run_delivery.py --fail --run <run_id> -
+                                      it closes the run and returns the credit
+                                      in seconds, not after 45 minutes.
+                                      active:true in the JSON on purpose: an
+                                      import applies it, and false silently
+                                      switched the webhook off.
                                       build_prune_workflow.py +
                                       workflows/jobstash-prune.json
                                       separate, 06:30: prune_jobs.py --json

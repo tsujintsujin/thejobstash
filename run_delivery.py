@@ -6,6 +6,9 @@ on the dashboard; nothing calls it on a schedule.
     python run_delivery.py --json --user <id> --run <run_id>
     python run_delivery.py --user <id|email> --dry     score and render, send
                                                        nothing, consume nothing
+    python run_delivery.py --fail --run <run_id>       failsafe: close a run the
+                                                       pipeline could not finish
+                                                       and hand the credit back
 
 A run costs one credit. The site takes it when it creates the runs row, before
 this starts. This marks that row done - or failed, and a failed run hands the
@@ -91,13 +94,21 @@ def fail_run(conn, run_id, user_id, error):
     so the refund can only follow one flip. The site's stale-run sweep closes
     runs under the same guard; whichever closes the run is the one that
     refunds.
+
+    user_id may be None: the run id is the site's own and identifies the row on
+    its own, and the owner comes back from the UPDATE. That is what lets the
+    workflow's failsafe close a run whose user could not even be looked up.
     """
-    rows = conn.execute(
-        "UPDATE runs SET status='failed', error=?, updated_at=? "
-        "WHERE id=? AND user_id=? AND status IN " + OPEN + " RETURNING id",
-        (error[:500], db.now_iso(), run_id, user_id)).fetchall()
+    sql = ("UPDATE runs SET status='failed', error=?, updated_at=? "
+           "WHERE id=? AND status IN " + OPEN)
+    args = [error[:500], db.now_iso(), run_id]
+    if user_id:
+        sql += " AND user_id=?"
+        args.append(user_id)
+    rows = conn.execute(sql + " RETURNING user_id", tuple(args)).fetchall()
     if rows:
-        conn.execute("UPDATE users SET credits=credits+1 WHERE id=?", (user_id,))
+        conn.execute("UPDATE users SET credits=credits+1 WHERE id=?",
+                     (rows[0]["user_id"],))
     conn.commit()
     return bool(rows)
 
@@ -108,11 +119,33 @@ def main():
     ap.add_argument("--user", required=True)
     ap.add_argument("--run")
     ap.add_argument("--dry", action="store_true")
+    # The workflow's failsafe: close a run the pipeline could not finish and
+    # hand the credit back, without scoring anything. Idempotent - a run
+    # run_delivery.py already closed is left exactly as it is.
+    ap.add_argument("--fail", action="store_true")
     args = ap.parse_args()
 
     # Started by n8n, so it inherits no environment - see db.use_live_store().
     db.use_live_store()
     conn = db.init()
+
+    if args.fail:
+        if not args.run:
+            log("  --fail needs --run")
+            return 2
+        returned = fail_run(conn, args.run, None, FAILED_COPY)
+        conn.close()
+        log("  %-28s FAILSAFE %s run %s"
+            % (args.user, "closed" if returned else "found nothing open for",
+               args.run))
+        doc = {"run_id": args.run, "ok": False,
+               "result": {"user_id": args.user, "error": "the run failed",
+                          "credit_returned": returned},
+               "failsafe": True}
+        print(json.dumps(doc, indent=2) if args.json else json.dumps(doc))
+        # 0 on purpose: the failsafe did its job, so the workflow carries on to
+        # its ops report rather than erroring out here.
+        return 0
 
     row = conn.execute("SELECT id,email FROM users WHERE id=? OR email=?",
                        (args.user, args.user)).fetchone()
@@ -141,6 +174,12 @@ def main():
                 log(traceback.format_exc())
                 r = {"user_id": row["id"], "email": row["email"],
                      "error": "%s: %s" % (type(e).__name__, e)}
+
+    # No user behind the id means nothing below ever runs, and the run row is
+    # still sitting there queued. It is the site's own run id, so close it here
+    # rather than leaving the dashboard spinning until the 45-minute sweep.
+    if args.run and not row:
+        r["credit_returned"] = fail_run(conn, args.run, None, FAILED_COPY)
 
     if args.run and row and claimed:
         if "error" in r:
