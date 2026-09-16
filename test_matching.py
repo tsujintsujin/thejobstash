@@ -276,6 +276,20 @@ check("react no longer scores",
                                     "react typescript"), off).reasons),
       False)
 
+# Work setup: the dashboard dropdown writes these two flags
+# (web/lib/workSetup.ts). Hybrid must differ from onsite, or the choice is
+# decoration.
+local = job("Office Admin", "Cebu, Philippines", "office based in Cebu")
+onsite_only = job("Office Admin", "Cebu, Philippines", "onsite only, Cebu")
+for name, ro, lo, want_local, want_strict in [
+    ("remote", True, False, "blocked", "blocked"),
+    ("hybrid", True, True, "home_onsite", "blocked"),
+    ("onsite", False, True, "home_onsite", "home_onsite"),
+]:
+    ws = dataclasses.replace(p, remote_only=ro, wants_local_onsite=lo)
+    check("%s: local office role" % name, M.classify_geo(local, ws)[0], want_local)
+    check("%s: 'onsite only' role" % name, M.classify_geo(onsite_only, ws)[0], want_strict)
+
 print()
 print("=" * 68)
 print("unit checks: %d passed, %d failed" % (ok, fail))

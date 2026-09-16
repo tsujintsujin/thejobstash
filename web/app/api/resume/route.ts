@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { currentUser } from "@/lib/session";
-import { saveProfile, db } from "@/lib/db";
+import { saveProfile, profileFor, db } from "@/lib/db";
+import { workSetupFlags, workSetupOf } from "@/lib/workSetup";
 import { pyFile } from "@/lib/py";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -44,7 +45,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const profile = { ...res.profile, user_id: user.id };
+    // A resume rarely states remote/hybrid/onsite, so a fresh parse must not
+    // reset what the user picked on the dashboard.
+    const prev = await profileFor(user.id);
+    const kept = prev ? workSetupFlags(workSetupOf(JSON.parse(prev.profile_json))) : {};
+    const profile = { ...res.profile, ...kept, user_id: user.id };
     await saveProfile(user.id, file.name, res.resume_text || "", JSON.stringify(profile));
 
     return NextResponse.json({

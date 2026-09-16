@@ -36,7 +36,7 @@ pricing is on: every pack charges ₱1** (`web/lib/packs.ts` `TEST_PRICE_PHP`).
 
 Verified 2026-09-16, after the cleanup went live: 13,271 postings, 10,697
 scored (the rest hidden for checking) · `test_cleanup.py` all pass ·
-`test_matching.py` 61/61 · `test_cloudflare.py` 39/39 ·
+`test_matching.py` 67/67 · `test_cloudflare.py` 39/39 ·
 `test_concurrency.py` 3/3 · `test_failsafe.py` 12/12. Justin's own run on the
 live site: 75 matches + 20 came close, every link a posting the cleanup
 stands behind.
@@ -96,6 +96,7 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Which boxes a digest's row shows | `summary_json.parts`, written by `render.write_digest()`. No column and no migration; a row without it predates the boxes and falls back to View + PDF |
 | How far back postings are scored | `delivery.py POOL_DAYS = 60` |
 | Assembling one run's digest | `delivery.py build_digest()` |
+| Remote / hybrid / onsite | The user picks it on the dashboard (`web/lib/workSetup.ts`, `/api/work-setup`); a resume rarely says. Stored as `remote_only` + `wants_local_onsite` only — `Profile(**profile_json)` rejects any new key, so never add a `work_setup` field. A resume upload keeps the choice |
 | Prices, pack sizes, the ₱1 test price | `web/lib/packs.ts` — the only place prices live |
 | The free credit | `users.credits DEFAULT 1`, `web/migrations/0003_credits.sql` (copy reads `FREE_CREDITS`) |
 | Taking a credit for a run, race-safe | `web/lib/db.ts startRun()`, called by `/api/deliver` — takes the credit only while that account has no open run, in the same batch, so one account runs once at a time |
@@ -227,7 +228,7 @@ python ingest.py             # one cleanup round by hand: scrape + compare
 python verify.py             # ...then check what it hid (--board NAME, --limit N)
 python deadrows.py           # what the cleanup deleted and flagged, per board
 python test_cleanup.py       # the cleanup's rules, no network
-python test_matching.py      # 61 checks
+python test_matching.py      # 67 checks
 python test_cloudflare.py    # 39 checks — the D1 shim vs real sqlite3
 ```
 
