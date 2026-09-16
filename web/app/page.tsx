@@ -43,7 +43,7 @@ const STEPS = [
     n: "02",
     bg: "bg-paper",
     h: "We sweep",
-    p: "Ten job boards, swept fresh when you run. Deduplicated across all of them, so one role posted four times is one row.",
+    p: "Thirteen job boards, swept every few hours, and a posting that closes is cleared out. One role posted on four boards shows up once.",
   },
   {
     n: "03",

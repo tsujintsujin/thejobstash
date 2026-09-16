@@ -305,11 +305,11 @@ export default function AuthCard({
           {[
             <>
               <b className="text-sun">{pool.toLocaleString()}</b> live postings,
-              scored against your resume overnight
+              scored against your resume each time you run it
             </>,
             <>
               Swept from <b className="text-sun">{sources}</b> job boards every
-              morning
+              few hours
             </>,
             <>The near-misses too — and exactly what blocked each one</>,
           ].map((line, i) => (
