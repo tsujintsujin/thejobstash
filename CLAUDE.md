@@ -10,6 +10,7 @@ structural:
 | `HANDOFF-CLOUDFLARE.md` | Where it runs now. D1, Workers, the tunnel, what is deployed and what is left. |
 | `SPEC-CAPABILITY-PARSER.md` | **Draft, not built.** Reworking `resume_parse.py` from keyword-matching to evidence-based understanding, so the product works for any profession rather than developers. Read before touching the parser. |
 | `HANDOFF-DEPLOY-EMAIL.md` | 2026-09-14/15: moving deploys behind GitHub, removing every PC → Cloudflare path, the Google popup fix, Brevo email + DNS. Hurdles, fixes, and what to do better. |
+| `HANDOFF-DIGEST-BOXES.md` | 2026-09-16: why the cap of 20 went, how the three boxes were arrived at and what shapes were rejected, the measured costs, and the two bugs found by reading rather than testing. Read before changing what a digest holds or how the Stash row is drawn. |
 | `PLAN-REBUILD.md` | **Draft, not built.** The eight-phase implementation plan for that spec plus the move from time-boxed plans to credits. Each phase has an exit test. **Phases 7–8 were settled and built 2026-09-14:** credits replace plans and the daily digest is gone. |
 
 Anything in `HANDOFF.md` about Supabase, "no tunnel", or the 1,760-job pool is
