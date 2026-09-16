@@ -212,7 +212,11 @@ export default async function Dashboard() {
                 className="border-3 border-ink bg-paper text-ink shadow-brut-sm px-[18px] py-4 mb-3"
                 key={d.id}
               >
-                <div className="flex gap-3.5 items-center">
+                {/* One line on a desktop width. Below 720px the row is
+                    narrower than the date plus three boxes plus the trash, and
+                    they used to sit on top of each other - so the boxes drop
+                    to their own full-width line underneath instead. */}
+                <div className="flex flex-wrap gap-3.5 items-center">
                   <div className="shrink-0">
                     <h3 className="text-[17px]">{d.day}</h3>
                     <div className="text-[13.5px] font-semibold mt-1.5 whitespace-nowrap">
@@ -262,13 +266,20 @@ export default async function Dashboard() {
                         </div>
                       );
                     return (
-                      <div className="flex gap-1.5 flex-1 min-w-0">
+                      <div className="flex gap-1.5 flex-1 min-w-0 max-[720px]:order-last max-[720px]:basis-full max-[720px]:flex-none">
                         {parts.map((p) => (
                           <div
                             key={p.key}
                             title={`${p.label} · ${p.count} job${p.count === 1 ? "" : "s"}`}
-                            style={{ flex: `${p.count} 1 0`, background: p.colour }}
-                            className="min-w-[104px] border-3 border-ink shadow-brut-sm flex items-stretch"
+                            /* The grow factor is a custom property rather
+                               than an inline `flex`, so the media query below
+                               can drop it. Inline styles beat any class, and
+                               on a phone 23/58/20 squeezes Strong Matches to
+                               about 75px - narrower than its own label. */
+                            style={
+                              { "--g": p.count, background: p.colour } as React.CSSProperties
+                            }
+                            className="[flex:var(--g)_1_0] max-[720px]:[flex:1_1_0] min-w-[104px] max-[720px]:min-w-0 border-3 border-ink shadow-brut-sm flex items-stretch"
                           >
                             <a
                               className="flex-1 min-w-0 px-2.5 py-2 text-[12px] font-extrabold leading-tight text-ink no-underline"
@@ -302,10 +313,10 @@ export default async function Dashboard() {
                       </div>
                     );
                   })()}
-                  <div className="flex gap-[7px] shrink-0 items-center">
+                  <div className="flex gap-[7px] shrink-0 items-center max-[720px]:ml-auto">
                     <span
                       aria-hidden="true"
-                      className="self-stretch w-[3px] bg-ink opacity-25 mx-0.5"
+                      className="self-stretch w-[3px] bg-ink opacity-25 mx-0.5 max-[720px]:hidden"
                     />
                     <DeleteDigest id={d.id} day={d.day} />
                   </div>

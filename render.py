@@ -199,7 +199,7 @@ def _job_card(m, show_blockers):
     bits = ["""
     <div class="job">
       <div class="top">
-        <h3><a href="%s">%s</a></h3>
+        <h3><a href="%s" target="_blank" rel="noopener noreferrer">%s</a></h3>
         <span class="score">%d</span>
       </div>
       <div class="meta"><span class="co">%s</span>
@@ -235,7 +235,15 @@ def _job_card(m, show_blockers):
                         % (heading,
                            "".join("<li>%s</li>" % _esc(i) for i in items)))
 
-    bits.append('<div class="link"><a href="%s">Open the posting &rarr;</a>'
+    # A new tab, not this one. Somebody reads a digest of 58 roles and opens
+    # several; sending them away from the list each time means going back for
+    # every one. rel is not optional here: the href is a URL scraped off a job
+    # board, and `allow-popups-to-escape-sandbox` means what opens is NOT
+    # sandboxed - without noopener it could reach back through window.opener
+    # and navigate the digest.
+    bits.append('<div class="link">'
+                '<a href="%s" target="_blank" rel="noopener noreferrer">'
+                'Open the posting &rarr;</a>'
                 '</div></div>' % _href(j.get("url")))
     return "".join(bits)
 
@@ -270,16 +278,6 @@ def digest_html(digest, email="", only=None, delivery_id=None):
 
     # Omitting `part` downloads the whole digest, which is the file the email
     # already attaches. A part view downloads only its own section.
-    # The tiles count the whole digest. On a part they sat under a heading
-    # that says something else - "58 worth a look." above a tile reading 81 -
-    # so they belong only to the page that is actually all three sections.
-    tiles = "" if only else ("""
-<div class="tiles">
-  <div class="tile"><b>%d</b><span>Matches</span></div>
-  <div class="tile" style="background:%s"><b>%d</b><span>Strong</span></div>
-  <div class="tile"><b>%d</b><span>Came close</span></div>
-</div>""" % (total, JADE, len(sec["strong"]), len(sec["near_miss"])))
-
     dl = ""
     if delivery_id:
         dl = ('<div class="dl"><a href="/api/download/%s%s">Download</a></div>'
@@ -293,10 +291,10 @@ def digest_html(digest, email="", only=None, delivery_id=None):
   <div class="stamp">%s%s</div>
 </div></div><div class="wrap">
 <div class="hero"><div><h1>%s</h1>
-<p class="lede">%s</p></div>%s</div>%s""" % (
+<p class="lede">%s</p></div>%s</div>""" % (
         _esc(s["day"]), CSS, _esc(s["day"]),
         " &nbsp;·&nbsp; " + _esc(email) if email else "",
-        _esc(heading), _esc(lede), dl, tiles)]
+        _esc(heading), _esc(lede), dl)]
 
     for key in SECTION_ORDER:
         if only and key != only:
@@ -428,6 +426,12 @@ def _selfcheck():
     # javascript: in a scraped url must never reach an href
     assert _href("javascript:alert(1)") == "#"
 
+    # A posting opens away from the digest, and never with a live opener
+    # handle back to it. Counted rather than matched once: the title and the
+    # button are both links to the same posting and both must carry it.
+    assert out.count('target="_blank"') == 2, "a posting link lost target"
+    assert out.count('rel="noopener noreferrer"') == 2, "a posting link lost rel"
+
     # -- the boxes ----------------------------------------------------------
     # Each box opens one section and downloads that section's PDF. The failure
     # this catches is silent in exactly the way the ones above are: a part
@@ -456,10 +460,11 @@ def _selfcheck():
     assert "What is standing in your way" not in part,         "the blocker roll-up leaked onto a matches-only part"
     assert "What is standing in your way" in whole, "blocker roll-up lost"
 
-    # The tiles count all three sections, so on a part they contradict the
-    # heading right above them - "58 worth a look." over a tile reading 81.
-    assert 'class="tiles"' in whole, "the whole digest lost its tiles"
-    assert 'class="tiles"' not in part, "tiles leaked onto a part page"
+    # The summary tiles are gone from every page. The heading already says
+    # what the page holds, and a tile counting something else next to it read
+    # as two numbers arguing - "58 worth a look." above a tile saying 81.
+    assert 'class="tiles"' not in whole, "the tiles are back on the digest"
+    assert 'class="tiles"' not in part, "the tiles are back on a part page"
 
     # No control without a route back to the site, rather than a dead button.
     assert "Download</a>" not in digest_html(d), "Download rendered with no id"
