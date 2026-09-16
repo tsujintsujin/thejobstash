@@ -270,6 +270,16 @@ def digest_html(digest, email="", only=None, delivery_id=None):
 
     # Omitting `part` downloads the whole digest, which is the file the email
     # already attaches. A part view downloads only its own section.
+    # The tiles count the whole digest. On a part they sat under a heading
+    # that says something else - "58 worth a look." above a tile reading 81 -
+    # so they belong only to the page that is actually all three sections.
+    tiles = "" if only else ("""
+<div class="tiles">
+  <div class="tile"><b>%d</b><span>Matches</span></div>
+  <div class="tile" style="background:%s"><b>%d</b><span>Strong</span></div>
+  <div class="tile"><b>%d</b><span>Came close</span></div>
+</div>""" % (total, JADE, len(sec["strong"]), len(sec["near_miss"])))
+
     dl = ""
     if delivery_id:
         dl = ('<div class="dl"><a href="/api/download/%s%s">Download</a></div>'
@@ -283,16 +293,10 @@ def digest_html(digest, email="", only=None, delivery_id=None):
   <div class="stamp">%s%s</div>
 </div></div><div class="wrap">
 <div class="hero"><div><h1>%s</h1>
-<p class="lede">%s</p></div>%s</div>
-<div class="tiles">
-  <div class="tile"><b>%d</b><span>Matches</span></div>
-  <div class="tile" style="background:%s"><b>%d</b><span>Strong</span></div>
-  <div class="tile"><b>%d</b><span>Came close</span></div>
-</div>""" % (_esc(s["day"]), CSS, _esc(s["day"]),
-             " &nbsp;·&nbsp; " + _esc(email) if email else "",
-             _esc(heading), _esc(lede), dl,
-             total, JADE, len(sec["strong"]),
-             len(sec["near_miss"]))]
+<p class="lede">%s</p></div>%s</div>%s""" % (
+        _esc(s["day"]), CSS, _esc(s["day"]),
+        " &nbsp;·&nbsp; " + _esc(email) if email else "",
+        _esc(heading), _esc(lede), dl, tiles)]
 
     for key in SECTION_ORDER:
         if only and key != only:
@@ -451,6 +455,11 @@ def _selfcheck():
     assert 'href="/api/download/dlv_x?part=strong"' in part,         "a part's Download does not point at that part"
     assert "What is standing in your way" not in part,         "the blocker roll-up leaked onto a matches-only part"
     assert "What is standing in your way" in whole, "blocker roll-up lost"
+
+    # The tiles count all three sections, so on a part they contradict the
+    # heading right above them - "58 worth a look." over a tile reading 81.
+    assert 'class="tiles"' in whole, "the whole digest lost its tiles"
+    assert 'class="tiles"' not in part, "tiles leaked onto a part page"
 
     # No control without a route back to the site, rather than a dead button.
     assert "Download</a>" not in digest_html(d), "Download rendered with no id"
