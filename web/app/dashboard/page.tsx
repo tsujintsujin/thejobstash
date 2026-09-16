@@ -6,6 +6,8 @@ import DigestPanel from "./DigestPanel";
 import DeleteDigest from "./DeleteDigest";
 import BuyCredits from "./BuyCredits";
 import SkillToggles from "./SkillToggles";
+import WorkSetupSelect from "./WorkSetupSelect";
+import { workSetupOf } from "@/lib/workSetup";
 import { STAT, STAT_L, STAT_N } from "../ui";
 
 export const dynamic = "force-dynamic";
@@ -134,9 +136,10 @@ export default async function Dashboard() {
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Work setup</span>
-                <b className={FACT_V}>
-                  {parsed.remote_only ? "Remote only" : "Remote or onsite"}
-                </b>
+                {/* Resumes rarely say this, so it is the user's to pick. */}
+                <div className={FACT_V}>
+                  <WorkSetupSelect initial={workSetupOf(parsed)} />
+                </div>
               </div>
               <div className={FACT}>
                 <span className={FACT_K}>Skills</span>
@@ -220,8 +223,7 @@ export default async function Dashboard() {
                   <div className="shrink-0">
                     <h3 className="text-[17px]">{d.day}</h3>
                     <div className="text-[13.5px] font-semibold mt-1.5 whitespace-nowrap">
-                      <b className="font-extrabold">{d.matches}</b> matches ·{" "}
-                      <b className="font-extrabold">{d.near_misses}</b> came close
+                      <b className="font-extrabold">{d.matches}</b> matches
                     </div>
                   </div>
                   {/* ?v= is a cache-buster, not a parameter the route reads.
