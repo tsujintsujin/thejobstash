@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ALERT, G3, SPINNER } from "../ui";
+import { fetchJson } from "@/lib/fetcher";
 import { PACKS, TEST_PRICE_PHP, chargePhp, packById } from "@/lib/packs";
 
 /**
@@ -78,23 +80,18 @@ export default function BuyCredits() {
     };
   }, [pay, paidAt]);
 
-  // Ask until PayMongo says paid. The balance refreshes at once, under the modal.
-  useEffect(() => {
-    if (!pay || paidAt) return;
-    let live = true;
-    const poll = setInterval(async () => {
-      const r = await fetch(`/api/pay/${pay.id}`, { cache: "no-store" }).catch(() => null);
-      const j = r?.ok ? ((await r.json().catch(() => ({}))) as any) : null;
-      if (live && j?.status === "paid") {
+  // Ask until PayMongo says paid. The balance refreshes at once, under the
+  // modal. Coming back to the tab from a banking app asks straight away rather
+  // than on the next tick; settle() credits once however often it is asked.
+  useSWR(pay && !paidAt ? `/api/pay/${pay.id}` : null, fetchJson, {
+    refreshInterval: POLL_MS,
+    onSuccess: (j: any) => {
+      if (j?.status === "paid" && !paidAt) {
         setPaidAt(Date.now());
         router.refresh();
       }
-    }, POLL_MS);
-    return () => {
-      live = false;
-      clearInterval(poll);
-    };
-  }, [pay, paidAt]);
+    },
+  });
 
   const backIn = paidAt
     ? Math.max(0, BACK_IN_S - Math.floor((now - paidAt) / 1000))
