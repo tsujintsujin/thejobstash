@@ -21,16 +21,20 @@ superseded by `HANDOFF-CLOUDFLARE.md`. Everything else in it still holds.
 
 A SaaS over the `JobHunt/` pipeline. Upload a resume once; each time the user
 runs it (one credit), the boards are swept if the pool is over 30 minutes old,
-the pool is scored against the resume, and the handful worth reading comes back
-as a digest — plus the near-misses and exactly what blocked each. **There is no
-daily email, and nothing runs on a schedule for a user.**
+the pool is scored against the resume, and everything the scorer stands behind
+comes back as a digest — split into Strong Matches and Worth a Look, plus the
+near-misses and exactly what blocked each. Each section is its own box on the
+Stash row, its own page and its own PDF. **There is no daily email, and nothing
+runs on a schedule for a user.**
 
 **Live at https://thejobstash.com.** Every account starts with 1 free credit;
 packs of 3 / 5 / 12 cost ₱99 / ₱149 / ₱299 through PayMongo (QR Ph). **Test
 pricing is on: every pack charges ₱1** (`web/lib/packs.ts` `TEST_PRICE_PHP`).
 
-Verified 2026-09-16: 11,879 jobs / 13 sources · `test_matching.py` 61/61 ·
-`test_cloudflare.py` 39/39.
+Verified 2026-09-16: 12,955 jobs / 13 sources · `test_matching.py` 61/61 ·
+`test_cloudflare.py` 39/39 · `test_concurrency.py` 7/7. One real profile scored
+against that pool yields 81 matches the scorer endorses — 23 strong, 58 worth a
+look — which is what the digest now shows, against 20 before.
 
 ---
 
@@ -78,8 +82,10 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Is this job a match, and what blocked it | `matching.py:404 score()` — the scorer |
 | Geography / timezone / visa gating | `matching.py:323 classify_geo()` |
 | Which blockers a user is allowed to see | `matching.py:60 SHOWABLE_BLOCKERS` |
-| How many jobs a digest holds | `delivery.py:31` — `TARGET = 20`, `FLOOR = 8` |
-| Near-miss quota | `delivery.py:33` — `NEAR_MIN, NEAR_MAX = 5, 10` |
+| How many jobs a digest holds | Every match at or above `profile.min_score`, uncapped. `delivery.py` drops the `stretch` tier — the one the scorer does not stand behind — and `PER_TIER_MAX = 150` is a guard against a freak profile, not a product number. `FLOOR = 8` still marks a run thin |
+| Near-miss quota | `delivery.py` — `NEAR_MAX = 20`. Capped on purpose: there are hundreds, and the section's value is the pattern behind the blockers, not the volume |
+| The three sections, their labels and colours | `render.py SECTION_STYLE` — one entry per box, whose 4th field is the label the dashboard puts on it. There is no `stretch` entry, so nothing can print it |
+| Which boxes a digest's row shows | `summary_json.parts`, written by `render.write_digest()`. No column and no migration; a row without it predates the boxes and falls back to View + PDF |
 | How far back postings are scored | `delivery.py POOL_DAYS = 60` |
 | Assembling one run's digest | `delivery.py build_digest()` |
 | Prices, pack sizes, the ₱1 test price | `web/lib/packs.ts` — the only place prices live |
@@ -88,7 +94,7 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Showing a run in progress | `web/lib/db.ts openRunFor()` → `dashboard/page.tsx` → `DigestPanel`'s bar. Server-side, so a refresh or a fresh sign-in resumes it instead of offering a second run |
 | Refunding a failed run, once | `web/lib/db.ts failRun()` · `run_delivery.py fail_run()` · the workflow's **Fail the run** node (`run_delivery.py --fail`) · 45-min stale sweep in `/api/runs/[id]`, the last resort for when this machine is gone entirely |
 | Score the pool as it stands; sweep after if 30+ min old (empty pool only: sweep first) | `n8n/build_saas_workflow.py FRESH_MINUTES = 30` · `ingest.py --age` · `ingest.lock` |
-| Opening a digest (modal, View, PDF) | `web/app/api/download/[id]/route.ts` — one route, reached from `DigestPanel`'s ready-modal and the Past digests rows |
+| Opening a digest (modal, View, PDF) | `web/app/api/download/[id]/route.ts` — one route, reached from `DigestPanel`'s ready-modal and the Stash rows. `?part=<key>` narrows it to one section, whitelisted against `PARTS` because the value becomes part of a filename on this machine |
 | Making a QR Ph code / turning a payment into credits | `web/lib/paymongo.ts createQr()` / `settle()` via `/api/pay`, `/api/pay/[id]` (the buy modal polls it), `/api/pay/webhook` |
 | Which payment methods are offered | QR Ph only, shown in our own modal (`web/app/dashboard/BuyCredits.tsx`). GCash and cards, once PayMongo approves them, need their own flows |
 | Resume file to Profile | `resume_parse.py` |
