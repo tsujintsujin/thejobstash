@@ -52,6 +52,13 @@ def build_digest(conn, user_id, target=TARGET):
     # The pool is local; conn is the account store (D1). Two stores on
     # purpose - see db.jobs_conn().
     rows = _rows_for(db.jobs_conn(), since=_days_ago(POOL_DAYS))
+    # Nothing to score is a broken pipeline, not a disappointing run: a fresh
+    # install, a sweep that failed on every board, or a run that arrived while
+    # the sweep meant to fill the pool was still going. Scoring an empty pool
+    # anyway built a 0-match digest, marked the run done and kept the credit.
+    # Erroring here fails the run instead, and a failed run refunds.
+    if not rows:
+        return {"error": "the job pool is empty - nothing to score yet"}
     scored = M.score_many(rows, profile)
     matches = sorted((m for m in scored if m.is_match), key=lambda m: -m.score)
     near = [m for m in scored if not m.is_match and m.showable]

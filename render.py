@@ -10,7 +10,7 @@ The styling is the Depo-derived system: thick black rules, hard offset shadows,
 flat saturated blocks, one heavy grotesk. It has to survive being printed, so
 nothing depends on hover, JavaScript or a web font that may not resolve.
 """
-import os, re, sys, html, subprocess, datetime
+import os, re, sys, html, shutil, subprocess, tempfile, datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -292,11 +292,18 @@ def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
         fh.write(digest_html(digest, email))
 
     pdf_path = base + ".pdf"
+    # Its own throwaway profile per render. Chrome locks a user-data-dir while
+    # it holds it, so without this two runs printing at once - or one printing
+    # while Justin's own Chrome is open - fight over the default profile and
+    # one of them loses. The loss is silent, because the except below turns it
+    # into "no PDF" rather than an error anyone sees.
+    profile_dir = tempfile.mkdtemp(prefix="jobstash-chrome-")
     try:
         subprocess.run(
             [CHROME, "--headless", "--disable-gpu", "--no-pdf-header-footer",
              "--run-all-compositor-stages-before-draw",
              "--virtual-time-budget=4000",
+             "--user-data-dir=" + profile_dir,
              "--print-to-pdf=" + pdf_path, "file:///" + html_path.replace("\\", "/")],
             check=True, timeout=90,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -304,6 +311,8 @@ def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
         # A missing Chrome must not cost the user their digest - the HTML is
         # the deliverable, the PDF is a convenience.
         pdf_path = None
+    finally:
+        shutil.rmtree(profile_dir, ignore_errors=True)
     return html_path, pdf_path
 
 
