@@ -82,7 +82,7 @@ export default function SiteFooter() {
           <div>
             <Brand size="text-[27px]" />
             <p className="text-[13px] opacity-70 mt-2">
-              Ten job boards, one resume, no noise.
+              Thirteen job boards, one resume, no noise.
             </p>
             <p className="text-[13px] opacity-70 mt-1">
               Have a suggestion? Send us an email at{" "}
