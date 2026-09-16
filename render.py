@@ -11,6 +11,7 @@ flat saturated blocks, one heavy grotesk. It has to survive being printed, so
 nothing depends on hover, JavaScript or a web font that may not resolve.
 """
 import os, re, sys, html, shutil, subprocess, tempfile, datetime
+from concurrent import futures
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -51,13 +52,20 @@ BLOCKER_LABEL = {
 }
 
 # Descending intensity, which is the whole point of the ordering: jade is the
-# one you act on, coral is the one you cannot.
+# one you act on, coral is the one you cannot. The fourth field is the label
+# the dashboard puts on that section's box - Title Case because it is a
+# control, not a heading, and it is here so the box and the section it opens
+# can never drift apart.
+#
+# `stretch` is absent on purpose. Everything below profile.min_score is
+# dropped in delivery.py rather than printed, so no section renders it and no
+# box offers it. See that module's docstring.
 SECTION_STYLE = {
-    "strong":       (JADE,   "Strong matches",  "Apply to these first."),
-    "worth_a_look": (SUN,    "Worth a look",    "Solid fits with a caveat or two."),
-    "stretch":      (PAPER,  "Stretch",         "Below your usual bar - shown because the run was quiet."),
-    "near_miss":    (CORAL,  "Came close",      "Real roles that matched your work but were blocked by one thing."),
+    "strong":       (JADE,   "Strong matches",  "Apply to these first.", "Strong Matches"),
+    "worth_a_look": (SUN,    "Worth a look",    "Solid fits with a caveat or two.", "Worth a Look"),
+    "near_miss":    (CORAL,  "Came close",      "Real roles that matched your work but were blocked by one thing.", "Came Close"),
 }
+SECTION_ORDER = ("strong", "worth_a_look", "near_miss")
 
 CSS = """
 *{box-sizing:border-box;margin:0;padding:0}
@@ -75,6 +83,20 @@ body{background:%(bone)s;color:%(ink)s;font-family:"Inter",-apple-system,
 h1{font-size:34px;line-height:1.05;letter-spacing:-.03em;font-weight:800;
    margin:0 0 8px}
 .lede{font-size:15px;line-height:1.5;max-width:62ch;margin-bottom:24px}
+/* The heading and the download control share one lane. align-items is
+   flex-start so a heading that wraps to two lines does not drag the button
+   down with it. wrap keeps the button under the heading on a phone rather
+   than squeezing both. */
+.hero{display:flex;justify-content:space-between;align-items:flex-start;
+      gap:18px;flex-wrap:wrap;margin-bottom:24px}
+.hero .lede{margin-bottom:0}
+.hero .dl{flex:0 0 auto}
+.hero .dl a{display:inline-block;border:3px solid %(ink)s;background:%(flare)s;
+     color:%(ink)s;font-size:13px;font-weight:800;padding:10px 18px;
+     box-shadow:3px 3px 0 %(ink)s;text-decoration:none;text-transform:uppercase;
+     letter-spacing:.06em;white-space:nowrap}
+/* A print of this page must not show a button nobody can press. */
+@media print{.hero .dl{display:none}}
 .tiles{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:30px}
 .tile{flex:1 1 150px;border:3px solid %(ink)s;box-shadow:5px 5px 0 %(ink)s;
       padding:14px 16px;background:#fff}
@@ -218,18 +240,40 @@ def _job_card(m, show_blockers):
     return "".join(bits)
 
 
-def digest_html(digest, email=""):
+def digest_html(digest, email="", only=None, delivery_id=None):
+    """One digest as a standalone page.
+
+    `only` narrows it to a single section, which is what each box on the
+    dashboard opens and what each part-PDF is printed from. The same function
+    renders both so a box and the page behind it cannot say different things.
+    `delivery_id` is what the download control points at; without it the page
+    has no way back to the site and the control is left off.
+    """
     s = digest["summary"]
     sec = digest["sections"]
-    total = sum(len(sec[k]) for k in ("strong", "worth_a_look", "stretch"))
+    total = sum(len(sec[k]) for k in ("strong", "worth_a_look"))
 
-    if s["thin"]:
+    if only:
+        heading = "%d %s." % (len(sec[only]), SECTION_STYLE[only][1].lower())
+        lede = SECTION_STYLE[only][2]
+    elif s["thin"]:
+        heading = ("%d match%s, %d that came close."
+                   % (total, "" if total == 1 else "es", len(sec["near_miss"])))
         lede = ("A quiet run. Rather than pad this out with roles that do not "
                 "fit, here is everything that genuinely did - plus what came "
                 "close and why.")
     else:
+        heading = ("%d match%s, %d that came close."
+                   % (total, "" if total == 1 else "es", len(sec["near_miss"])))
         lede = ("Scored against your resume, deduplicated across every board, "
                 "and filtered down from %d live postings." % s["pool_size"])
+
+    # Omitting `part` downloads the whole digest, which is the file the email
+    # already attaches. A part view downloads only its own section.
+    dl = ""
+    if delivery_id:
+        dl = ('<div class="dl"><a href="/api/download/%s%s">Download</a></div>'
+              % (_esc(delivery_id), "?part=" + _esc(only) if only else ""))
 
     parts = ["""<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -238,23 +282,25 @@ def digest_html(digest, email=""):
   <div class="brand">TheJobStash</div>
   <div class="stamp">%s%s</div>
 </div></div><div class="wrap">
-<h1>%d match%s, %d that came close.</h1>
-<p class="lede">%s</p>
+<div class="hero"><div><h1>%s</h1>
+<p class="lede">%s</p></div>%s</div>
 <div class="tiles">
   <div class="tile"><b>%d</b><span>Matches</span></div>
   <div class="tile" style="background:%s"><b>%d</b><span>Strong</span></div>
   <div class="tile"><b>%d</b><span>Came close</span></div>
 </div>""" % (_esc(s["day"]), CSS, _esc(s["day"]),
              " &nbsp;·&nbsp; " + _esc(email) if email else "",
-             total, "" if total == 1 else "es", len(sec["near_miss"]),
-             lede, total, JADE, len(sec["strong"]),
+             _esc(heading), _esc(lede), dl,
+             total, JADE, len(sec["strong"]),
              len(sec["near_miss"]))]
 
-    for key in ("strong", "worth_a_look", "stretch", "near_miss"):
+    for key in SECTION_ORDER:
+        if only and key != only:
+            continue
         rows = sec.get(key) or []
         if not rows:
             continue
-        colour, title, blurb = SECTION_STYLE[key]
+        colour, title, blurb, _box = SECTION_STYLE[key]
         parts.append('<div class="sec"><div class="sechead" style="background:%s">'
                      '<h2>%s &mdash; %d</h2><em>%s</em></div>'
                      % (colour, title, len(rows), blurb))
@@ -262,7 +308,9 @@ def digest_html(digest, email=""):
             parts.append(_job_card(m, show_blockers=(key == "near_miss")))
         parts.append('</div>')
 
-    if s["blocker_copy"]:
+    # The blocker roll-up belongs to the came-close material. On a matches-only
+    # part it is a list of walls next to jobs that cleared all of them.
+    if s["blocker_copy"] and only in (None, "near_miss"):
         parts.append('<div class="block"><h2>What is standing in your way</h2>'
                      '<ul>%s</ul></div>'
                      % "".join("<li>%s</li>" % _esc(c) for c in s["blocker_copy"]))
@@ -276,10 +324,19 @@ def digest_html(digest, email=""):
 
 
 def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
-    """Write the HTML and print a PDF beside it. Returns (html, pdf|None).
+    """Write the digest and print its PDFs. Returns (html, pdf|None, parts).
 
     Named by delivery id, never by date: a second run on the same date would
     otherwise overwrite the first run's files.
+
+    Four files come out of one digest: the whole thing, which is what the
+    email attaches and what the dashboard's View opens, plus one per section,
+    which is what each box opens and downloads. `parts` describes the boxes in
+    order - the site stores it and has no other way to know how many exist.
+
+    The prints run concurrently. Each already gets a throwaway Chrome profile
+    (see _print_pdf), which is the only thing that made them safe to overlap;
+    sequentially this is four cold Chrome starts, about 19s, for no reason.
     """
     out_dir = out_dir or OUT_DIR
     os.makedirs(out_dir, exist_ok=True)
@@ -287,11 +344,33 @@ def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
     dlv = re.sub(r"[^A-Za-z0-9_-]", "", delivery_id)[:32]
     base = os.path.join(out_dir, "digest-%s-%s" % (safe, dlv))
 
+    sec = digest["sections"]
+    parts = [k for k in SECTION_ORDER if sec.get(k)]
+
     html_path = base + ".html"
     with open(html_path, "w", encoding="utf-8") as fh:
-        fh.write(digest_html(digest, email))
+        fh.write(digest_html(digest, email, delivery_id=delivery_id))
+    for key in parts:
+        with open("%s-%s.html" % (base, key), "w", encoding="utf-8") as fh:
+            fh.write(digest_html(digest, email, only=key,
+                                 delivery_id=delivery_id))
 
-    pdf_path = base + ".pdf"
+    jobs = [(html_path, base + ".pdf")]
+    jobs += [("%s-%s.html" % (base, k), "%s-%s.pdf" % (base, k)) for k in parts]
+    with futures.ThreadPoolExecutor(max_workers=len(jobs)) as pool:
+        done = dict(zip([j[1] for j in jobs],
+                        pool.map(lambda j: _print_pdf(*j), jobs)))
+
+    manifest = [{"key": k, "count": len(sec[k]),
+                 "label": SECTION_STYLE[k][3],
+                 "colour": SECTION_STYLE[k][0],
+                 "pdf": bool(done.get("%s-%s.pdf" % (base, k)))}
+                for k in parts]
+    return html_path, done.get(base + ".pdf"), manifest
+
+
+def _print_pdf(html_path, pdf_path):
+    """One headless-Chrome print. Returns the path, or None if it failed."""
     # Its own throwaway profile per render. Chrome locks a user-data-dir while
     # it holds it, so without this two runs printing at once - or one printing
     # while Justin's own Chrome is open - fight over the default profile and
@@ -313,7 +392,7 @@ def write_digest(digest, user_id, delivery_id, email="", out_dir=None):
         pdf_path = None
     finally:
         shutil.rmtree(profile_dir, ignore_errors=True)
-    return html_path, pdf_path
+    return pdf_path
 
 
 def _selfcheck():
@@ -331,7 +410,7 @@ def _selfcheck():
         score=62, reasons=["strong skill overlap"],
         blockers=[B("geography", "Hiring only in the United States"),
                   B("seniority", "Wants 8+ years")])
-    empty = {"strong": [], "worth_a_look": [], "stretch": [], "near_miss": [m]}
+    empty = {"strong": [], "worth_a_look": [], "near_miss": [m]}
     out = digest_html({"sections": empty, "summary": {
         "day": "2026-01-01", "pool_size": 10, "scored": 10, "thin": False,
         "blocker_copy": []}})
@@ -344,6 +423,42 @@ def _selfcheck():
     assert INK in out and BONE in out and FLARE in out, "palette not applied"
     # javascript: in a scraped url must never reach an href
     assert _href("javascript:alert(1)") == "#"
+
+    # -- the boxes ----------------------------------------------------------
+    # Each box opens one section and downloads that section's PDF. The failure
+    # this catches is silent in exactly the way the ones above are: a part
+    # page that renders, looks right, and is quietly showing the wrong jobs or
+    # pointing its download at the whole digest.
+    j = lambda t: types.SimpleNamespace(
+        job={"title": t, "company": "C", "location": "Remote",
+             "source": "s", "salary": "", "url": "https://e.com/" + t,
+             "description": "d"},
+        score=40, reasons=[], blockers=[])
+    d = {"sections": {"strong": [j("AlphaRole")],
+                      "worth_a_look": [j("BetaRole")],
+                      "near_miss": [m]},
+         "summary": {"day": "2026-01-01", "pool_size": 10, "scored": 10,
+                     "thin": False, "blocker_copy": ["3 were onsite only"]}}
+
+    whole = digest_html(d, delivery_id="dlv_x")
+    for t in ("AlphaRole", "BetaRole", "Senior React Developer"):
+        assert t in whole, "%s missing from the whole digest" % t
+    assert 'href="/api/download/dlv_x"' in whole, "whole digest lost Download"
+
+    part = digest_html(d, only="strong", delivery_id="dlv_x")
+    assert "AlphaRole" in part, "the strong part lost its own job"
+    assert "BetaRole" not in part, "the strong part is showing other sections"
+    assert 'href="/api/download/dlv_x?part=strong"' in part,         "a part's Download does not point at that part"
+    assert "What is standing in your way" not in part,         "the blocker roll-up leaked onto a matches-only part"
+    assert "What is standing in your way" in whole, "blocker roll-up lost"
+
+    # No control without a route back to the site, rather than a dead button.
+    assert "Download</a>" not in digest_html(d), "Download rendered with no id"
+
+    # Every section with rows gets exactly one box, in order, and none of them
+    # is `stretch` - that tier is dropped in delivery.py, never printed.
+    assert [k for k in SECTION_ORDER if d["sections"].get(k)] ==         ["strong", "worth_a_look", "near_miss"], "box order changed"
+    assert "stretch" not in SECTION_STYLE, "stretch is printable again"
     print("render.py selfcheck ok")
 
 

@@ -23,6 +23,29 @@ const FACT_K =
 const FACT_V =
   "block text-[19px] font-extrabold mt-[3px] tracking-[-0.02em]";
 
+/* One box per section of a digest, written by render.py into summary_json.
+   A row from before the boxes existed has none, and falls back to View. */
+type Part = { key: string; count: number; label: string; colour: string; pdf?: boolean };
+
+function partsOf(summaryJson: unknown): Part[] {
+  if (typeof summaryJson !== "string") return [];
+  try {
+    const p = JSON.parse(summaryJson)?.parts;
+    /* Shape-checked rather than trusted: this is the only place a rendered
+       digest's own JSON reaches the page, and a half-written row must degrade
+       to "no boxes" instead of throwing the whole dashboard. */
+    return Array.isArray(p)
+      ? p.filter(
+          (x: Part) =>
+            x && typeof x.key === "string" && typeof x.label === "string" &&
+            typeof x.colour === "string" && Number.isFinite(x.count)
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function Dashboard() {
   const user = await currentUser();
   if (!user) redirect("/signup?mode=signin");
@@ -189,10 +212,10 @@ export default async function Dashboard() {
                 className="border-3 border-ink bg-paper text-ink shadow-brut-sm px-[18px] py-4 mb-3"
                 key={d.id}
               >
-                <div className="flex justify-between gap-3.5 items-start">
-                  <div>
+                <div className="flex gap-3.5 items-center">
+                  <div className="shrink-0">
                     <h3 className="text-[17px]">{d.day}</h3>
-                    <div className="text-[13.5px] font-semibold mt-1.5">
+                    <div className="text-[13.5px] font-semibold mt-1.5 whitespace-nowrap">
                       <b className="font-extrabold">{d.matches}</b> matches ·{" "}
                       <b className="font-extrabold">{d.near_misses}</b> came close
                     </div>
@@ -203,28 +226,69 @@ export default async function Dashboard() {
                       no-store cannot evict an entry stored without it. A URL
                       that was never poisoned is the only thing that gets past
                       it. */}
-                  <div className="flex gap-[7px] flex-wrap">
-                    <a
-                      className="btn btn-paper btn-sm"
-                      href={`/api/download/${d.id}?format=html&v=${encodeURIComponent(d.created_at)}`}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      View
-                    </a>
-                    {/* PDF is ink, not the bare .btn default. Bare .btn is
-                        flare, and flare is this page's one header-level accent
-                        - Sign out wears it. A row action shouting louder than
-                        the primary action below it read as a different design.
-                        Paper + ink is the pair every other control here uses. */}
-                    {d.pdf_path && (
-                      <a
-                        className="btn btn-ink btn-sm"
-                        href={`/api/download/${d.id}?v=${encodeURIComponent(d.created_at)}`}
-                      >
-                        PDF
-                      </a>
-                    )}
+                  {/* One box per section, widest first. flex-basis is the job
+                      count, so a run with 50 strong matches has a visibly
+                      fatter green box than one with 12 - the ranking is the
+                      display, without a word of copy saying so. min-w keeps a
+                      small section from collapsing under its own label, which
+                      does mean a very lopsided run overstates its smallest
+                      box; the title carries the true count. */}
+                  {(() => {
+                    const parts = partsOf(d.summary_json);
+                    const v = encodeURIComponent(d.created_at);
+                    if (!parts.length)
+                      return (
+                        <a
+                          className="btn btn-paper btn-sm ml-auto"
+                          href={`/api/download/${d.id}?format=html&v=${v}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View
+                        </a>
+                      );
+                    return (
+                      <div className="flex gap-1.5 flex-1 min-w-0">
+                        {parts.map((p) => (
+                          <div
+                            key={p.key}
+                            title={`${p.label} · ${p.count} job${p.count === 1 ? "" : "s"}`}
+                            style={{ flex: `${p.count} 1 0`, background: p.colour }}
+                            className="min-w-[104px] border-3 border-ink shadow-brut-sm flex items-stretch"
+                          >
+                            <a
+                              className="flex-1 min-w-0 px-2.5 py-2 text-[12px] font-extrabold leading-tight text-ink no-underline"
+                              href={`/api/download/${d.id}?format=html&part=${p.key}&v=${v}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {p.label}
+                            </a>
+                            {/* Two targets in one box: the label reads it in
+                                the browser, the glyph saves the PDF. One click
+                                for either, instead of making everyone open the
+                                page to reach a download. */}
+                            {p.pdf !== false && (
+                              <a
+                                className="shrink-0 px-2 flex items-center text-ink no-underline"
+                                href={`/api/download/${d.id}?part=${p.key}&v=${v}`}
+                                aria-label={`Download ${p.label} as PDF`}
+                              >
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                     stroke="currentColor" strokeWidth="2.5"
+                                     strokeLinecap="round" strokeLinejoin="round"
+                                     aria-hidden="true">
+                                  <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
+                                  <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+                                </svg>
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  <div className="flex gap-[7px] shrink-0 items-center">
                     <span
                       aria-hidden="true"
                       className="self-stretch w-[3px] bg-ink opacity-25 mx-0.5"
