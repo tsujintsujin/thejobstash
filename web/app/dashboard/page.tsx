@@ -236,16 +236,30 @@ export default async function Dashboard() {
                   {(() => {
                     const parts = partsOf(d.summary_json);
                     const v = encodeURIComponent(d.created_at);
+                    // A digest rendered before the boxes existed has no parts
+                    // and no per-section files to offer. It keeps the pair it
+                    // was delivered with: dropping PDF here would have taken
+                    // the button away from every digest already in the stash.
                     if (!parts.length)
                       return (
-                        <a
-                          className="btn btn-paper btn-sm ml-auto"
-                          href={`/api/download/${d.id}?format=html&v=${v}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View
-                        </a>
+                        <div className="flex gap-[7px] ml-auto shrink-0">
+                          <a
+                            className="btn btn-paper btn-sm"
+                            href={`/api/download/${d.id}?format=html&v=${v}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            View
+                          </a>
+                          {d.pdf_path && (
+                            <a
+                              className="btn btn-ink btn-sm"
+                              href={`/api/download/${d.id}?v=${v}`}
+                            >
+                              PDF
+                            </a>
+                          )}
+                        </div>
                       );
                     return (
                       <div className="flex gap-1.5 flex-1 min-w-0">
