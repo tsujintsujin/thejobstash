@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import { ALERT, SPINNER } from "../ui";
+import { HttpError, fetchJson } from "@/lib/fetcher";
 
 /**
  * The one control on the dashboard: spend a credit to run this account's
@@ -17,7 +19,9 @@ import { ALERT, SPINNER } from "../ui";
  *
  * A run can take minutes when the pool is stale and every board is swept
  * first, which outlasts any request Cloudflare will hold open. So /api/deliver
- * only starts the run, and this polls /api/runs/<id> until it lands.
+ * only starts the run, and this polls /api/runs/<id> until it lands - with
+ * SWR, so a tab left in the background stops asking and asks again the moment
+ * it is looked at.
  */
 type Ready = { id: string; pdf: boolean; matches: number; near: number };
 
@@ -43,16 +47,62 @@ export default function DigestPanel({
   // run fills it. It never goes backwards.
   const [pct, setPct] = useState(openRun ? 4 : 0);
   const [running, setRunning] = useState(openRun?.status === "running");
-  // The current poll loop. Replacing it (or unmounting) stops the old one.
-  const watching = useRef<object | null>(null);
+  // The run being polled. null stops the poll.
+  const [watch, setWatch] = useState<{ id: string; t0: number } | null>(() =>
+    openRun ? { id: openRun.id, t0: Date.parse(openRun.created_at) } : null
+  );
 
+  // A run opened elsewhere (another tab) arrives through router.refresh().
   useEffect(() => {
-    if (openRun) watch(openRun.id, Date.parse(openRun.created_at));
-    return () => {
-      watching.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!openRun) return;
+    setBusy(true);
+    setWatch((w) =>
+      w?.id === openRun.id ? w : { id: openRun.id, t0: Date.parse(openRun.created_at) }
+    );
   }, [openRun?.id]);
+
+  useSWR(watch ? `/api/runs/${watch.id}` : null, fetchJson, {
+    refreshInterval: POLL_MS,
+    // onSuccess, not an effect on the data: SWR skips a re-render when the
+    // answer is unchanged, and the bar has to creep on every answer anyway.
+    onSuccess: (st: any) => {
+      if (!watch) return;
+      const secs = (Date.now() - watch.t0) / 1000;
+      if (st.status === "queued") setPct((p) => Math.max(p, Math.min(15, 4 + secs / 2)));
+      if (st.status === "running") {
+        setRunning(true);
+        setPct((p) => Math.max(p, 15 + 80 * (1 - Math.exp(-secs / 120))));
+      }
+      if (st.status === "done") {
+        setWatch(null);
+        setPct(100);
+        setBusy(false);
+        setReady({
+          id: st.delivery_id,
+          pdf: !!st.pdf,
+          matches: st.matches ?? 0,
+          near: st.near_misses ?? 0,
+        });
+        // The delivery row is written, so the server render gains a Past
+        // digests entry with the same two buttons the modal offers.
+        router.refresh();
+      }
+      if (st.status === "failed") {
+        setWatch(null);
+        setBusy(false);
+        router.refresh();
+        setErr(st.error || "The run failed. Your credit has been returned.");
+      }
+    },
+    // A 5xx is a blip and SWR retries it; 401/404 is an answer.
+    onError: (e) => {
+      if (e instanceof HttpError && (e.status === 401 || e.status === 404)) {
+        setWatch(null);
+        setBusy(false);
+        setErr("Lost track of that run. Refresh the page — it will appear under Past digests when it finishes.");
+      }
+    },
+  });
 
   // Escape closes, and the page behind must not scroll under the modal.
   useEffect(() => {
@@ -84,48 +134,7 @@ export default function DigestPanel({
     // The credit is spent the moment the run starts, so the balance above
     // should say so while the run works.
     router.refresh();
-    watch(j.run_id, t0);
-  }
-
-  async function watch(runId: string, t0: number) {
-    const me = {};
-    watching.current = me;
-    setBusy(true);
-    for (;;) {
-      await new Promise((res) => setTimeout(res, POLL_MS));
-      if (watching.current !== me) return;
-      const s = await fetch(`/api/runs/${runId}`, { cache: "no-store" });
-      if (s.status === 401 || s.status === 404) {
-        setBusy(false);
-        return setErr("Lost track of that run. Refresh the page — it will appear under Past digests when it finishes.");
-      }
-      if (!s.ok) continue; // a blip, not an answer
-      const st = (await s.json().catch(() => ({}))) as any;
-      const secs = (Date.now() - t0) / 1000;
-      if (st.status === "queued") setPct((p) => Math.max(p, Math.min(15, 4 + secs / 2)));
-      if (st.status === "running") {
-        setRunning(true);
-        setPct((p) => Math.max(p, 15 + 80 * (1 - Math.exp(-secs / 120))));
-      }
-      if (st.status === "done") {
-        setPct(100);
-        setBusy(false);
-        setReady({
-          id: st.delivery_id,
-          pdf: !!st.pdf,
-          matches: st.matches ?? 0,
-          near: st.near_misses ?? 0,
-        });
-        // The delivery row is written, so the server render gains a Past
-        // digests entry with the same two buttons the modal offers.
-        return router.refresh();
-      }
-      if (st.status === "failed") {
-        setBusy(false);
-        router.refresh();
-        return setErr(st.error || "The run failed. Your credit has been returned.");
-      }
-    }
+    setWatch({ id: j.run_id, t0 });
   }
 
   if (!hasProfile) {
