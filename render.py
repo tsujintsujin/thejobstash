@@ -136,6 +136,9 @@ h1{font-size:34px;line-height:1.05;letter-spacing:-.03em;font-weight:800;
 .link a{display:inline-block;border:3px solid %(ink)s;background:%(flare)s;
         color:%(ink)s;font-size:13px;font-weight:800;padding:9px 16px;
         box-shadow:3px 3px 0 %(ink)s;text-decoration:none}
+.link .lreq{display:inline-block;margin-left:10px;font-size:10px;font-weight:800;
+        text-transform:uppercase;letter-spacing:.06em;border:2px solid %(ink)s;
+        padding:2px 6px;vertical-align:middle;white-space:nowrap}
 .meta .sal{font-weight:700}
 /* A literal middot, never the CSS hex-escape form. This block is an ordinary
    Python string, so Python reads that escape as octal - a NUL byte - followed
@@ -241,10 +244,14 @@ def _job_card(m, show_blockers):
     # board, and `allow-popups-to-escape-sandbox` means what opens is NOT
     # sandboxed - without noopener it could reach back through window.opener
     # and navigate the digest.
+    # A board the verifier found behind a login. The link works; the reader
+    # should know before clicking that the board will ask them to sign in.
+    login = ('<span class="lreq">Login Required</span>'
+             if j.get("status") == "login_required" else "")
     bits.append('<div class="link">'
                 '<a href="%s" target="_blank" rel="noopener noreferrer">'
-                'Open the posting &rarr;</a>'
-                '</div></div>' % _href(j.get("url")))
+                'Open the posting &rarr;</a>%s'
+                '</div></div>' % (_href(j.get("url")), login))
     return "".join(bits)
 
 
@@ -473,6 +480,14 @@ def _selfcheck():
     # is `stretch` - that tier is dropped in delivery.py, never printed.
     assert [k for k in SECTION_ORDER if d["sections"].get(k)] ==         ["strong", "worth_a_look", "near_miss"], "box order changed"
     assert "stretch" not in SECTION_STYLE, "stretch is printable again"
+
+    # A login board's posting says so beside its button; nothing else does.
+    lj = j("GatedRole")
+    lj.job["status"] = "login_required"
+    gated = digest_html({"sections": {"strong": [lj, j("OpenRole")],
+                                      "worth_a_look": [], "near_miss": []},
+                         "summary": d["summary"]})
+    assert gated.count("Login Required</span>") == 1, "login label wrong"
     print("render.py selfcheck ok")
 
 

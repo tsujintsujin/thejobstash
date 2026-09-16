@@ -107,7 +107,13 @@ PRAGMA journal_mode=WAL;
 -- The shared pool. Scraped once and shared, regardless of how many users exist;
 -- this is what makes the marginal cost of user 500 the same as user 1.
 CREATE TABLE IF NOT EXISTS jobs (
-    fp            TEXT PRIMARY KEY,     -- normalised company+title hash
+    -- One row per board posting: the same role on four boards is four rows,
+    -- each with its own link and its own status. Collapsing them is the
+    -- result's job (delivery.py), not the pool's - a merged row kept only the
+    -- first board's link, so when that board dropped it the row kept a dead
+    -- link while another board still had the job open.
+    id            TEXT PRIMARY KEY,     -- posting_id(): board + link
+    fp            TEXT NOT NULL,        -- normalised company+title; groups one job across boards
     source        TEXT NOT NULL,
     title         TEXT NOT NULL,
     company       TEXT,
@@ -119,6 +125,14 @@ CREATE TABLE IF NOT EXISTS jobs (
     -- JobHunt throws this away after scoring. Storing it is what allows a user
     -- who signs up today to be scored against jobs scraped last week.
     description   TEXT,
+    -- valid | unverified | login_required. Set by the cleanup round
+    -- (ingest.py) and the verifier (verify.py). Only valid and
+    -- login_required are scored; a dead posting is deleted, not kept.
+    status        TEXT NOT NULL DEFAULT 'valid',
+    -- When verify.py last found the page alive. A board whose scraper reads
+    -- only part of its listing leaves most of its live jobs "missing" every
+    -- round; this stops them being re-checked every three hours.
+    checked_at    TEXT,
     first_seen    TEXT NOT NULL,
     last_seen     TEXT NOT NULL
 );
@@ -238,6 +252,39 @@ CREATE TABLE IF NOT EXISTS pool_stats (
 """
 
 
+def posting_id(source, url, fp):
+    """The pool's key: one board's one posting. A posting with no link falls
+    back to its fingerprint so two linkless rows on one board still differ."""
+    return hashlib.sha1(("%s|%s" % (source, url or ("fp:" + fp))
+                         ).encode("utf-8")).hexdigest()
+
+
+def _rebuild_jobs(conn):
+    """Move a pool keyed on company+title to one row per posting.
+
+    ALTER TABLE cannot change a primary key, so the table is rebuilt. Every
+    existing row carries on as valid; the next cleanup round decides.
+    """
+    have = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)")}
+    if not have or "id" in have:
+        return
+    conn.create_function("posting_id", 3, posting_id)
+    conn.executescript("""
+        ALTER TABLE jobs RENAME TO jobs_by_fp;
+        DROP INDEX IF EXISTS idx_jobs_first_seen;
+        DROP INDEX IF EXISTS idx_jobs_source;
+    """)
+    conn.executescript(SCHEMA.split("CREATE TABLE IF NOT EXISTS users")[0])
+    conn.execute(
+        "INSERT OR IGNORE INTO jobs (id,fp,source,title,company,location,url,"
+        "salary,seniority,posted,description,status,first_seen,last_seen) "
+        "SELECT posting_id(source,url,fp),fp,source,title,company,location,url,"
+        "salary,seniority,posted,description,'valid',first_seen,last_seen "
+        "FROM jobs_by_fp")
+    conn.execute("DROP TABLE jobs_by_fp")
+    conn.commit()
+
+
 def connect(path=None):
     conn = sqlite3.connect(path or DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
@@ -258,6 +305,8 @@ MIGRATIONS = [
 # of NULLs, which is what makes it correct here: every password-only account
 # has a NULL google_sub and none of them collide.
 POST_MIGRATIONS = [
+    "CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)",
+    "CREATE INDEX IF NOT EXISTS idx_jobs_url    ON jobs(url)",
     "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_sub "
     "ON users(google_sub)",
 ]
@@ -278,6 +327,7 @@ def init(path=None):
         return d1.connect()
 
     conn = connect(path)
+    _rebuild_jobs(conn)
     conn.executescript(SCHEMA)
     for table, column, ddl in MIGRATIONS:
         have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
@@ -322,29 +372,31 @@ def verify_password(password, stored):
 # small helpers used by both the worker and the web API
 # ---------------------------------------------------------------------------
 
-def upsert_job(conn, row, fp):
-    """Insert, or just bump last_seen if this job is already known.
+def upsert_job(conn, row, fp, status="valid"):
+    """Insert a posting, or mark a known one as listed again.
 
-    The fingerprint is the primary key, so the same role carried by four boards
-    collapses to one row and re-seeing it tomorrow does not create a new one.
+    Keyed on the posting (board + link), not the job: the same role on another
+    board is another row. Seeing it listed makes it `status` again, whatever a
+    previous round said.
     """
     stamp = now_iso()
+    pid = posting_id(row.get("source"), row.get("url"), fp)
     cur = conn.execute(
-        "UPDATE jobs SET last_seen=?, "
+        "UPDATE jobs SET last_seen=?, status=?, "
         "description=CASE WHEN length(COALESCE(description,''))"
         " < length(COALESCE(?,'')) THEN ? ELSE description END "
-        "WHERE fp=?",
-        (stamp, row.get("description"), row.get("description"), fp))
+        "WHERE id=?",
+        (stamp, status, row.get("description"), row.get("description"), pid))
     if cur.rowcount:
         return False                      # already knew about it
     conn.execute(
-        "INSERT INTO jobs (fp,source,title,company,location,url,salary,"
-        "seniority,posted,description,first_seen,last_seen) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-        (fp, row.get("source"), row.get("title"), row.get("company"),
+        "INSERT INTO jobs (id,fp,source,title,company,location,url,salary,"
+        "seniority,posted,description,status,first_seen,last_seen) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (pid, fp, row.get("source"), row.get("title"), row.get("company"),
          row.get("location"), row.get("url"), row.get("salary"),
          row.get("seniority"), row.get("posted"), row.get("description"),
-         stamp, stamp))
+         status, stamp, stamp))
     return True
 
 

@@ -145,7 +145,7 @@ export default function DigestPanel({
       <div className="flex items-center gap-3 flex-wrap mb-5">
         <button className="btn btn-ink" onClick={run} disabled={busy || empty}>
           {busy && <span className={SPINNER} />}
-          {busy ? "Sweeping and scoring…" : "Run my resume · 1 credit"}
+          {busy ? "Scoring…" : "Run my resume · 1 credit"}
         </button>
         {busy ? (
           <div className="flex-1 min-w-[220px]">
@@ -165,7 +165,7 @@ export default function DigestPanel({
               />
             </div>
             <span className="block text-xs font-semibold opacity-70 mt-1.5">
-              {running ? "Sweeping the boards and scoring" : "Starting your run"} · You
+              {running ? "Scoring your resume against the pool" : "Starting your run"} · You
               can leave — it lands under Past digests.
             </span>
           </div>

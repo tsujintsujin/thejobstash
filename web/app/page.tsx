@@ -81,7 +81,7 @@ const FAQ = [
   ],
   [
     "What if a run turns up nothing good?",
-    "You get a shorter digest that says so plainly, with the near-misses and their reasons. It still uses the credit, because the sweep and the scoring happened, but we'd rather hand you a short honest list than pad it with roles that don't fit. A run that fails outright gives the credit back.",
+    "You get a shorter digest that says so plainly, with the near-misses and their reasons. It still uses the credit, because the scoring happened, but we'd rather hand you a short honest list than pad it with roles that don't fit. A run that fails outright gives the credit back.",
   ],
   [
     "Do I need to link any accounts?",
@@ -118,10 +118,10 @@ export default async function Home() {
               Start applying.
             </h1>
             <p className="lede opacity-95 mb-[30px]">
-              Upload your resume once. Each time you run it, we sweep the job
-              boards, score thousands of live postings against it and hand you
-              the handful worth your time — plus the ones that came close, and
-              exactly what blocked them.
+              Upload your resume once. Each time you run it, we score
+              thousands of live postings against it and hand you the handful
+              worth your time — plus the ones that came close, and exactly what
+              blocked them. Closed postings are cleared out every few hours.
             </p>
             <div className="flex gap-3.5 flex-wrap">
               {/* Scoring costs one machine real work, so nothing runs a

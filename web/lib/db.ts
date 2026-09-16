@@ -295,7 +295,7 @@ export async function poolStats() {
   // request gets 10ms total, and on 2026-09-12 that scan is what pushed cold
   // starts over the limit and left the home page returning 500.
   //
-  // ingest.py writes this row after every sweep. The jobs table itself no longer
+  // ingest.py and verify.py write this row after every cleanup round. The jobs table itself no longer
   // lives here at all - it is local to the machine that scores resumes, which
   // is the only thing that ever read a job row.
   const row = await db()
