@@ -249,8 +249,13 @@ export async function runFor(userId: string, runId: string) {
 export async function deliveriesFor(userId: string) {
   const { results } = await db()
     .prepare(
+      // summary_json carries `parts`: one entry per box on the row. There is
+      // no column for it and no other record of how many parts a delivery
+      // has, so a row without it is a digest rendered before the boxes
+      // existed and falls back to a single View.
       "SELECT id,day,matches,near_misses,html_path,pdf_path,email_status," +
-        "created_at FROM deliveries WHERE user_id=? ORDER BY created_at DESC LIMIT 30"
+        "summary_json,created_at FROM deliveries WHERE user_id=? " +
+        "ORDER BY created_at DESC LIMIT 30"
     )
     .bind(userId)
     .all<any>();

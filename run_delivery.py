@@ -43,7 +43,12 @@ def deliver_one(conn, user_id, email, dry=False):
     # the R2 keys, so two runs on the same date never overwrite each other, and
     # the dashboard's /api/download/<id> link, the one way to open a digest.
     dlv_id = db.new_id("dlv_")
-    html_path, pdf_path = render.write_digest(digest, user_id, dlv_id, email)
+    html_path, pdf_path, parts = render.write_digest(digest, user_id, dlv_id,
+                                                     email)
+    # One entry per box on the dashboard, in the order they are shown. The
+    # site reads it straight out of summary_json; there is no other record of
+    # how many parts a delivery has, and no column to add one to.
+    s["parts"] = parts
 
     status, detail = "skipped", "dry run"
     if not dry:
@@ -55,6 +60,10 @@ def deliver_one(conn, user_id, email, dry=False):
     # machine, so the rendered pair goes up to R2 and the row records the key
     # instead of a path that only exists here. Best-effort: a failed upload
     # leaves the local path and costs a download button, not a delivery.
+    # NOTE: only the whole-digest pair goes up. The per-section parts are
+    # served over the tunnel by basename, so enabling R2 without teaching
+    # put_digest about parts would leave every box 404ing. R2 is not
+    # subscribed - see CLAUDE.md's open items.
     stored_html, stored_pdf = html_path, pdf_path
     if not dry and r2.configured():
         stored_html, stored_pdf = r2.put_digest(user_id, dlv_id,

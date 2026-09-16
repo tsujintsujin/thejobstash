@@ -13,6 +13,12 @@ export const revalidate = 0;
 // this origin, next to the session cookie. render.py escapes every field, and
 // this is the second lock: the page may not run any script at all, so an
 // escaping bug or a hostile posting still cannot act as the signed-in user.
+// The sections a digest is split into, and the only values `?part=` may take.
+// A whitelist rather than a sanitiser: this string becomes part of a filename
+// on the machine that rendered the digest, so it may never be caller-supplied
+// text however carefully it is escaped. Order matches render.py SECTION_ORDER.
+const PARTS = ["strong", "worth_a_look", "near_miss"] as const;
+
 const DIGEST_CSP =
   "sandbox allow-popups allow-popups-to-escape-sandbox " +
   "allow-top-navigation-by-user-activation; default-src 'none'; " +
@@ -44,8 +50,19 @@ export async function GET(
   if (!row) return new NextResponse("Not found.", { status: 404, headers: { "Cache-Control": "private, no-store" } });
 
   const wantPdf = req.nextUrl.searchParams.get("format") !== "html";
-  const target: string | null = wantPdf ? row.pdf_path : row.html_path;
+  let target: string | null = wantPdf ? row.pdf_path : row.html_path;
   if (!target) return new NextResponse("That format wasn't generated.", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+
+  // One box on the dashboard = one section = one pair of files rendered
+  // beside the whole digest, named `<base>-<part>.<ext>`. No part means the
+  // whole digest, which is what the email attaches and what View opens.
+  const part = req.nextUrl.searchParams.get("part");
+  if (part) {
+    if (!(PARTS as readonly string[]).includes(part)) {
+      return new NextResponse("No such section.", { status: 404, headers: { "Cache-Control": "private, no-store" } });
+    }
+    target = target.replace(/\.(pdf|html)$/i, `-${part}.$1`);
+  }
 
   // Anything that is not an R2 key is a path on the machine that rendered it.
   // That machine is already reachable over the tunnel that carries the
@@ -75,7 +92,7 @@ export async function GET(
           : "text/html; charset=utf-8",
         "Content-Disposition":
           `${wantPdf ? "attachment" : "inline"}; ` +
-          `filename="jobstash-${row.day}.${wantPdf ? "pdf" : "html"}"`,
+          `filename="jobstash-${row.day}${part ? `-${part}` : ""}.${wantPdf ? "pdf" : "html"}"`,
         "Cache-Control": "private, no-store",
         ...(wantPdf ? {} : { "Content-Security-Policy": DIGEST_CSP }),
       },
@@ -103,7 +120,7 @@ export async function GET(
       "Content-Type": wantPdf ? "application/pdf" : "text/html; charset=utf-8",
       "Content-Disposition":
         `${wantPdf ? "attachment" : "inline"}; ` +
-        `filename="jobstash-${row.day}.${wantPdf ? "pdf" : "html"}"`,
+        `filename="jobstash-${row.day}${part ? `-${part}` : ""}.${wantPdf ? "pdf" : "html"}"`,
       "Cache-Control": "private, no-store",
       ...(wantPdf ? {} : { "Content-Security-Policy": DIGEST_CSP }),
     },
