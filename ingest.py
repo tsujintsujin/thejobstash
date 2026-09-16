@@ -18,6 +18,7 @@ Two things it does that JobHunt's sweep does not:
     python ingest.py            all sources
     python ingest.py --fast     JSON APIs only, no Playwright
     python ingest.py --age      minutes since the last sweep landed, as JSON
+    python ingest.py --wait     sweep, or wait out the sweep already running
 """
 import os, re, sys, hashlib, io, json, datetime, time
 
@@ -45,6 +46,7 @@ PRUNE_DAYS = 30
 # belongs to a sweep that crashed.
 LOCK = os.path.join(HERE, "ingest.lock")
 LOCK_STALE_S = 60 * 60
+POLL_S = 15          # how often wait_for_lock() looks again
 
 
 def norm(s):
@@ -117,6 +119,28 @@ def take_lock():
         return True
     except FileExistsError:
         return False
+
+
+def wait_for_lock(log=None):
+    """Block until the sweep already under way finishes. Returns True if it did.
+
+    Only the empty-pool path needs this. Every other run scores the pool as it
+    stands and sweeps afterwards, so it never cares who else is sweeping - but
+    with an empty pool there is nothing to score, and skipping straight past an
+    in-flight sweep handed the user a digest built from no jobs at all.
+
+    Waits out a stale lock rather than stealing it: LOCK_STALE_S is the age at
+    which take_lock() drops one, so anything still held past that is gone and
+    the next sweep will clear it.
+    """
+    deadline = time.time() + LOCK_STALE_S
+    while os.path.exists(LOCK):
+        if time.time() > deadline:
+            return False
+        if log:
+            print("  waiting for the sweep already running...", file=log)
+        time.sleep(POLL_S)
+    return True
 
 
 def run(fast=False, verbose=True):
@@ -212,10 +236,17 @@ if __name__ == "__main__":
     if not take_lock():
         # Not an error: the sweep already under way is refreshing the same
         # pool this one would have.
-        print("another sweep is already running - skipped", file=log)
+        #
+        # --wait is the empty-pool caller, which has nothing to score until
+        # some sweep lands. It waits for the one in flight instead of pressing
+        # on, and does not start a second sweep afterwards - the one it waited
+        # for just filled the pool it was going to fill.
+        waited = wait_for_lock(log) if "--wait" in sys.argv else False
+        print("another sweep is already running - %s"
+              % ("waited for it" if waited else "skipped"), file=log)
         if as_json:
-            print(json.dumps({"skipped": "already running", "fetched": 0,
-                              "new": 0, "sources": []}))
+            print(json.dumps({"skipped": "already running", "waited": waited,
+                              "fetched": 0, "new": 0, "sources": []}))
         raise SystemExit(0)
 
     print("ingesting (%s sources)" % ("fast" if fast else "all"), file=log)
