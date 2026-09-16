@@ -252,9 +252,9 @@ export const PRIVACY: Section[] = [
       <>
         <P>
           Listings are scraped from public job boards into a single shared
-          pool. A sweep runs when somebody runs their resume and the pool is
-          more than half an hour old, and it collects every listing it finds —
-          without reference to anyone&rsquo;s profile. Your resume is then scored against that pool
+          pool every few hours, and a listing a board stops showing is checked
+          and removed once it has closed — all without reference to
+          anyone&rsquo;s profile. Your resume is then scored against that pool
           on our own server.
         </P>
         <P>

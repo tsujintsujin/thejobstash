@@ -8,8 +8,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "TheJobStash — jobs that actually match your resume",
   description:
-    "Upload your resume. Each run sweeps the job boards, scores thousands of " +
-    "live postings against it and hands you the handful worth your time, plus " +
+    "Upload your resume. Each run scores thousands of live postings against " +
+    "it and hands you the handful worth your time, plus " +
     "the ones that came close, and exactly why they didn't.",
 };
 

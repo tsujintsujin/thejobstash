@@ -51,7 +51,8 @@ export const TERMS: Section[] = [
     body: (
       <>
         <P>
-          TheJobStash sweeps public job boards into a shared pool, scores that
+          TheJobStash keeps a shared pool of listings from public job boards,
+          re-checked every few hours so closed postings drop out, scores that
           pool against the resume you upload each time you run it, and hands
           you the listings that matched — along with the ones that came close and the
           reason each of those fell short.
@@ -80,11 +81,10 @@ export const TERMS: Section[] = [
           recurs: you are charged once, when you buy a pack.
         </Note>
         <P>
-          One credit is one run of your resume — the boards swept, the postings
-          scored, a digest produced. The credit is taken when the run starts,
+          One credit is one run of your resume — the postings scored and a
+          digest produced. The credit is taken when the run starts,
           and handed back automatically if the run fails. A run that works but
-          finds little still uses its credit, because the sweep and the scoring
-          happened. Credits do not expire. A digest file that arrives broken is refunded
+          finds little still uses its credit, because the scoring happened. Credits do not expire. A digest file that arrives broken is refunded
           too; the{" "}
           <Link href="/refunds" className="underline">
             Refund Policy

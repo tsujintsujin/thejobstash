@@ -143,8 +143,8 @@ export async function pyFile(
 /**
  * `run`: hand one user's run to n8n on the scorer machine.
  *
- * Returns as soon as n8n has accepted it. The run itself - a board sweep when
- * the pool is stale, then scoring and rendering - finishes later and writes
+ * Returns as soon as n8n has accepted it. The run itself - scoring and
+ * rendering, never a board sweep - finishes later and writes
  * its own runs row, which the dashboard polls.
  */
 export async function pyRun(

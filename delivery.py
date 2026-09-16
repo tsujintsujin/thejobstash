@@ -38,13 +38,32 @@ POOL_DAYS = 60       # postings first seen longer ago than this are not scored
 
 
 def _rows_for(conn, since=None):
-    q = ("SELECT fp,source,title,company,location,url,salary,seniority,posted,"
-         "description,first_seen FROM jobs")
+    # Only what the cleanup stands behind. An unverified posting is one its
+    # board stopped listing and verify.py has not cleared yet - hidden until
+    # it has, because a dead link in a paid digest is the bug this prevents.
+    q = ("SELECT id,fp,source,title,company,location,url,salary,seniority,"
+         "posted,description,status,first_seen FROM jobs "
+         "WHERE status IN ('valid','login_required')")
     args = []
     if since:
-        q += " WHERE first_seen >= ?"
+        q += " AND first_seen >= ?"
         args.append(since)
     return [dict(r) for r in conn.execute(q, args)]
+
+
+def _one_per_job(scored):
+    """The pool keeps every board's posting of a role; a digest shows it once.
+
+    Of a role's postings, the one that is a match beats one that is not, then
+    the higher score, then a link that opens without a login.
+    """
+    best = {}
+    rank = lambda m: (m.is_match, m.score, m.job.get("status") != "login_required")
+    for m in scored:
+        k = m.job["fp"]
+        if k not in best or rank(m) > rank(best[k]):
+            best[k] = m
+    return list(best.values())
 
 
 def _days_ago(n):
@@ -69,7 +88,7 @@ def build_digest(conn, user_id, per_tier_max=PER_TIER_MAX):
     # Erroring here fails the run instead, and a failed run refunds.
     if not rows:
         return {"error": "the job pool is empty - nothing to score yet"}
-    scored = M.score_many(rows, profile)
+    scored = _one_per_job(M.score_many(rows, profile))
     matches = sorted((m for m in scored if m.is_match), key=lambda m: -m.score)
     near = [m for m in scored if not m.is_match and m.showable]
 

@@ -4,11 +4,11 @@ import { failRun, runFor } from "@/lib/db";
 
 /**
  * Where a run is up to. The dashboard polls this after /api/deliver starts a
- * run, because a stale pool means sweeping every board first - longer than
- * Cloudflare holds a request open.
+ * run, because scoring and rendering can outlast the time Cloudflare holds a
+ * request open.
  */
 
-// Well past the slowest sweep seen (JobStreet's full-ad backfill). A run still
+// Well past the slowest run seen. A run still
 // open after this died somewhere nothing could report it - n8n stopped, the
 // machine slept - so it is closed here and its credit returned.
 const STALE_MS = 45 * 60 * 1000;

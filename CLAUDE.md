@@ -10,6 +10,7 @@ structural:
 | `HANDOFF-CLOUDFLARE.md` | Where it runs now. D1, Workers, the tunnel, what is deployed and what is left. |
 | `SPEC-CAPABILITY-PARSER.md` | **Draft, not built.** Reworking `resume_parse.py` from keyword-matching to evidence-based understanding, so the product works for any profession rather than developers. Read before touching the parser. |
 | `HANDOFF-DEPLOY-EMAIL.md` | 2026-09-14/15: moving deploys behind GitHub, removing every PC → Cloudflare path, the Google popup fix, Brevo email + DNS. Hurdles, fixes, and what to do better. |
+| `HANDOFF-CLEANUP.md` | 2026-09-16: the cleanup workflow - why dead postings reached digests, the freshList / verify design, what each board does when the verifier opens it, and the first real round's numbers. Read before touching `ingest.py`, `verify.py` or the pool's `status`. |
 | `HANDOFF-DIGEST-BOXES.md` | 2026-09-16: why the cap of 20 went, how the three boxes were arrived at and what shapes were rejected, the measured costs, and the two bugs found by reading rather than testing. Read before changing what a digest holds or how the Stash row is drawn. |
 | `PLAN-REBUILD.md` | **Draft, not built.** The eight-phase implementation plan for that spec plus the move from time-boxed plans to credits. Each phase has an exit test. **Phases 7–8 were settled and built 2026-09-14:** credits replace plans and the daily digest is gone. |
 
@@ -21,21 +22,24 @@ superseded by `HANDOFF-CLOUDFLARE.md`. Everything else in it still holds.
 ## What this is
 
 A SaaS over the `JobHunt/` pipeline. Upload a resume once; each time the user
-runs it (one credit), the boards are swept if the pool is over 30 minutes old,
-the pool is scored against the resume, and everything the scorer stands behind
+runs it (one credit), the pool is scored against the resume as it stands, and
+everything the scorer stands behind
 comes back as a digest — split into Strong Matches and Worth a Look, plus the
 near-misses and exactly what blocked each. Each section is its own box on the
 Stash row, its own page and its own PDF. **There is no daily email, and nothing
-runs on a schedule for a user.**
+runs on a schedule for a user.** The only schedule is the pool's own cleanup
+(below), which keeps dead postings out of every digest.
 
 **Live at https://thejobstash.com.** Every account starts with 1 free credit;
 packs of 3 / 5 / 12 cost ₱99 / ₱149 / ₱299 through PayMongo (QR Ph). **Test
 pricing is on: every pack charges ₱1** (`web/lib/packs.ts` `TEST_PRICE_PHP`).
 
-Verified 2026-09-16: 12,955 jobs / 13 sources · `test_matching.py` 61/61 ·
-`test_cloudflare.py` 39/39 · `test_concurrency.py` 7/7. One real profile scored
-against that pool yields 81 matches the scorer endorses — 23 strong, 58 worth a
-look — which is what the digest now shows, against 20 before.
+Verified 2026-09-16, after the cleanup went live: 13,271 postings, 10,697
+scored (the rest hidden for checking) · `test_cleanup.py` all pass ·
+`test_matching.py` 61/61 · `test_cloudflare.py` 39/39 ·
+`test_concurrency.py` 3/3 · `test_failsafe.py` 12/12. Justin's own run on the
+live site: 75 matches + 20 came close, every link a posting the cleanup
+stands behind.
 
 ---
 
@@ -46,9 +50,11 @@ CLOUDFLARE                          THIS PC  (behind an outbound tunnel)
 Worker (Next.js via OpenNext)       py_server.py :3300
   pages, auth, sessions, credits      resume_parse · matching · summarise
   D1: accounts only                   render.py (headless Chrome -> PDF)
-    users sessions profiles           n8n run workflow (webhook, no schedule)
-    payments runs deliveries            -> ingest.py, run_delivery.py
-    pool_stats (3 numbers)          jobstash.db  <- THE JOB POOL LIVES HERE
+    users sessions profiles           n8n run workflow (webhook) -> run_delivery.py
+    payments runs deliveries          n8n cleanup workflow (boot + every 3 h)
+    pool_stats (3 numbers)              -> ingest.py, verify.py
+                                    jobstash.db  <- THE JOB POOL LIVES HERE
+                                    freshList.db, deadRowsDb.db (cleanup's own)
   R2  (not enabled)
   PayMongo checkout + webhook
 ```
@@ -57,7 +63,7 @@ Worker (Next.js via OpenNext)       py_server.py :3300
 
 The pool is **local by design** (`db.jobs_conn()`). Only the scorer ever reads a
 job row; the site wants three counts, which `ingest.py` pushes into D1's
-`pool_stats` after every sweep. Keeping the pool in D1 meant this machine pulled
+`pool_stats` after every cleanup round. Keeping the pool in D1 meant this machine pulled
 several MB back down through the Worker to score one resume — that is what
 exhausted the free plan's 10ms CPU budget on 2026-09-12 and took the home page
 down. Do not move it back.
@@ -65,7 +71,8 @@ down. Do not move it back.
 Accounts stay in D1 via `db.init()`. Two stores, on purpose.
 
 Two features need this machine up: resume upload, and running a resume (which
-also needs n8n; `scorer.cmd` starts py_server, the tunnel and n8n). Everything
+also needs n8n; `scorer.cmd` starts py_server, the tunnel and n8n). n8n starting
+is also what starts a cleanup round. Everything
 else is pure Cloudflare and does not care if it is off; those two then say "the
 scorer is offline" by design, and a run that cannot start hands its credit back.
 
@@ -94,14 +101,22 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Taking a credit for a run, race-safe | `web/lib/db.ts startRun()`, called by `/api/deliver` — takes the credit only while that account has no open run, in the same batch, so one account runs once at a time |
 | Showing a run in progress | `web/lib/db.ts openRunFor()` → `dashboard/page.tsx` → `DigestPanel`'s bar. Server-side, so a refresh or a fresh sign-in resumes it instead of offering a second run |
 | Refunding a failed run, once | `web/lib/db.ts failRun()` · `run_delivery.py fail_run()` · the workflow's **Fail the run** node (`run_delivery.py --fail`) · 45-min stale sweep in `/api/runs/[id]`, the last resort for when this machine is gone entirely |
-| Score the pool as it stands; sweep after if 30+ min old (empty pool only: sweep first) | `n8n/build_saas_workflow.py FRESH_MINUTES = 30` · `ingest.py --age` · `ingest.lock` |
+| A run scores the pool as it stands and never scrapes; an empty pool fails the run and refunds | `n8n/build_saas_workflow.py` · `delivery.build_digest()` |
+| Keeping the pool fresh and dead postings out | `n8n/build_cleanup_workflow.py` ("TheJobStash Cleanup", `jobstashclean001`): at n8n start and every 3 h, `ingest.py` then `verify.py`, one `ingest.lock` for both |
+| Which postings a run may score | `jobs.status`: `valid` and `login_required` only. `delivery._rows_for()`; the home page counts the same (`ingest.SCORED`) |
+| A board stopped listing a posting | `ingest.compare()` marks it `unverified` (hidden). Not re-marked for `RECHECK_HOURS = 24` after the verifier found it alive, because most JobHunt scrapers read only a page or two of their board |
+| A board came back short or failed | `ingest.scrape()`: under `SHORT_RATIO = 0.5` of its last good count (`deadRowsDb.boards.last_count`) it is scraped again, `RETRIES = 2`; still short, it is skipped and its postings keep their status |
+| Is an unverified posting dead | `verify.classify()` — 404/410, an exact closed phrase (`DEAD_PHRASES`), a same-site redirect that drops the job's id, or fewer than 60% of the title's words on the page. Timeouts and refusals get 3 tries, then delete |
+| A board refuses the verifier / wants a login | `verify.board_round()`: refused on its first 3 pages or half its batch → flagged blocked, no refused posting deleted (himalayas, remotive, and weworkremotely, which refuses live pages too). 2 login walls in a row → flagged `login_required`; its listed postings carry a "Login Required" label (`render._job_card`), its unlisted ones are deleted |
+| Why a posting was deleted | `deadRowsDb.db dead_rows` — `python deadrows.py` prints it per board |
+| One role on several boards | One pool row per posting (`jobs.id` = board + link). `delivery._one_per_job()` shows each company+title once, preferring the match, then the score, then a link without a login |
 | Opening a digest (modal, View, PDF) | `web/app/api/download/[id]/route.ts` — one route, reached from `DigestPanel`'s ready-modal and the Stash rows. `?part=<key>` narrows it to one section, whitelisted against `PARTS` because the value becomes part of a filename on this machine |
 | Making a QR Ph code / turning a payment into credits | `web/lib/paymongo.ts createQr()` / `settle()` via `/api/pay`, `/api/pay/[id]` (the buy modal polls it), `/api/pay/webhook` |
 | Which payment methods are offered | QR Ph only, shown in our own modal (`web/app/dashboard/BuyCredits.tsx`). GCash and cards, once PayMongo approves them, need their own flows |
 | Resume file to Profile | `resume_parse.py` |
 | A user as data | `profiles.py` |
-| Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards) |
-| Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/` |
+| Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards), inside the cleanup round only |
+| Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/`. A pool still keyed on company+title is rebuilt to one row per posting the first time `db.jobs_conn()` opens it (`_rebuild_jobs`) |
 
 `api_bridge.py` is the JSON contract between the site and the Python; the
 commands are `parse`, `profile`, `preview`, `deliver`, `stats`.
@@ -158,8 +173,8 @@ D:\AIO Freelance\JobHunt\sources.py   10 of the 13 scrapers — imported read-on
                                       every profession. Override dir: JOBHUNT_DIR
 D:\AIO Freelance\n8n\                 build_saas_workflow.py +
                                       workflows/jobhunt-saas.json
-                                      the run workflow: webhook, no schedule.
-                                      ingest.py --age / --json, run_delivery.py
+                                      the run workflow: webhook, no schedule,
+                                      never scrapes. run_delivery.py
                                       --json --user <id> --run <run_id>
                                       No node may end the run early: each one
                                       continues on error so every failure
@@ -170,9 +185,13 @@ D:\AIO Freelance\n8n\                 build_saas_workflow.py +
                                       active:true in the JSON on purpose: an
                                       import applies it, and false silently
                                       switched the webhook off.
-                                      Pruning (jobs unlisted 30+ days) is part
-                                      of every sweep in ingest.py - there is no
-                                      separate prune job or schedule.
+                                      build_cleanup_workflow.py +
+                                      workflows/jobstash-cleanup.json
+                                      the cleanup: n8n Trigger (instance
+                                      started) + every 3 hours ->
+                                      ingest.py --json -> verify.py --json.
+                                      Pruning (unseen 30+ days) is part of
+                                      each round.
 ```
 
 Neither is under version control. **The workflow that actually runs a resume
@@ -182,7 +201,8 @@ workflow JSON changes too, and nothing will remind you.
 Import with `N8N_USER_FOLDER` pointing at the n8n folder, as `start_n8n.cmd`
 sets it. Without it, `n8n import:workflow` writes into `~/.n8n`, reports
 success, and the running n8n never sees the workflow. Stop n8n, import, then
-`n8n publish:workflow --id=jobhuntsaas0001`.
+`n8n publish:workflow --id=jobhuntsaas0001` (or `jobstashclean001`), then start
+n8n again. Starting it runs a cleanup round straight away.
 
 ---
 
@@ -203,10 +223,17 @@ No command on this PC changes anything on Cloudflare. `preview`, `d1:migrate`
 and `d1:seed` were removed 2026-09-15; the PC's wrangler is logged out.
 
 ```bash
-python ingest.py --fast      # refill the pool -> D1
+python ingest.py             # one cleanup round by hand: scrape + compare
+python verify.py             # ...then check what it hid (--board NAME, --limit N)
+python deadrows.py           # what the cleanup deleted and flagged, per board
+python test_cleanup.py       # the cleanup's rules, no network
 python test_matching.py      # 61 checks
 python test_cloudflare.py    # 39 checks — the D1 shim vs real sqlite3
 ```
+
+To try a round without touching the live pool, point `JOBSTASH_DB` at a copy
+and set `JOBSTASH_SKIP_STATS=1` (otherwise the copy's counts reach the live home
+page). freshList and deadRowsDb follow `JOBSTASH_DB` into the copy's folder.
 
 **Deploys go PC → GitHub → Cloudflare, never PC → Cloudflare.** Push to
 `master` on `tsujintsujin/thejobstash`; Cloudflare Workers Builds (connected to
@@ -265,4 +292,11 @@ dashboard's D1 console for `jobstash`, then check `d1_migrations`.
   browser before "fixing" overflow.
 - **A stray Next 14 project at `D:\AIO Freelance\package.json`** shadows module
   resolution; `outputFileTracingRoot` pins around it.
+- **This checkout is the live Python.** py_server runs whatever is on disk
+  here for real users, whatever branch is checked out. On 2026-09-16 a test
+  suite opened the live pool with the new code and rebuilt it mid-branch.
+  Change the pool's shape only in a way the running code survives.
+- **Verifier dead phrases must be exact.** jobspresso prints "Position
+  closed? Let us know." on every live posting, and every board's header says
+  "Sign in". A single-word rule deletes live jobs silently.
 - Full lists: `HANDOFF.md` §8 and `HANDOFF-CLOUDFLARE.md` §7.

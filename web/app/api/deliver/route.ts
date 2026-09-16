@@ -7,8 +7,8 @@ import { pyRun } from "@/lib/py";
  * Start one run of this account's resume. Costs one credit.
  *
  * The credit is taken here, before anything runs, so two clicks cannot spend
- * one credit twice. The run itself - sweep the boards if the pool is more than
- * 30 minutes old, score, render - happens in n8n on the scorer machine and can
+ * one credit twice. The run itself - score the pool, render - happens in n8n
+ * on the scorer machine (it never scrapes; the cleanup workflow does) and can
  * take longer than Cloudflare holds a request open. So this answers with a run
  * id at once, and the dashboard polls /api/runs/<id>.
  *
