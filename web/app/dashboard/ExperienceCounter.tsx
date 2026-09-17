@@ -54,36 +54,44 @@ export default function ExperienceCounter({
   }
 
   const btn =
-    "w-9 h-9 flex-none grid place-items-center border-2 border-ink bg-paper " +
-    "text-[20px] font-extrabold leading-none cursor-pointer hover:bg-ink " +
-    "hover:text-paper disabled:opacity-30 disabled:pointer-events-none";
+    "w-9 h-[22px] grid place-items-center bg-paper cursor-pointer " +
+    "hover:bg-ink hover:text-paper disabled:opacity-30 " +
+    "disabled:pointer-events-none";
+  const chevron = (d: string) => (
+    <svg aria-hidden viewBox="0 0 12 8" className="w-3 h-2">
+      <path d={d} fill="none" stroke="currentColor" strokeWidth="2.5" />
+    </svg>
+  );
 
   return (
     <>
       <div className={cell}>
         <span className={label}>Experience</span>
-        <div className="flex items-center gap-2.5 mt-[3px]">
-          <button
-            type="button"
-            className={btn}
-            aria-label="One year less"
-            disabled={!years}
-            onClick={() => step(-1)}
-          >
-            −
-          </button>
-          <b className={`${value} !mt-0 min-w-[4.5ch] text-center`} aria-live="polite">
+        <div className="flex items-center gap-3 mt-[3px]">
+          <b className={`${value} !mt-0`} aria-live="polite">
             {years ?? "—"} {years === 1 ? "yr" : "yrs"}
           </b>
-          <button
-            type="button"
-            className={btn}
-            aria-label="One year more"
-            disabled={years === MAX_YEARS}
-            onClick={() => step(1)}
-          >
-            +
-          </button>
+          {/* A spinner: up adds a year, down takes one. */}
+          <div className="flex flex-col border-2 border-ink divide-y-2 divide-ink">
+            <button
+              type="button"
+              className={btn}
+              aria-label="One year more"
+              disabled={years === MAX_YEARS}
+              onClick={() => step(1)}
+            >
+              {chevron("M1 7l5-5 5 5")}
+            </button>
+            <button
+              type="button"
+              className={btn}
+              aria-label="One year less"
+              disabled={!years}
+              onClick={() => step(-1)}
+            >
+              {chevron("M1 1l5 5 5-5")}
+            </button>
+          </div>
         </div>
         {err && <span className="text-[12px] font-bold block mt-1">{err}</span>}
       </div>
