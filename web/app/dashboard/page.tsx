@@ -7,6 +7,7 @@ import DeleteDigest from "./DeleteDigest";
 import BuyCredits from "./BuyCredits";
 import SkillToggles from "./SkillToggles";
 import WorkSetupSelect from "./WorkSetupSelect";
+import ExperienceCounter from "./ExperienceCounter";
 import { workSetupOf } from "@/lib/workSetup";
 import { STAT, STAT_L, STAT_N } from "../ui";
 
@@ -122,14 +123,13 @@ export default async function Dashboard() {
                 out rather than crammed into one dot-separated line. Skills are
                 the long tail and are folded away; see below. */}
             <div className={FACTS}>
-              <div className={FACT}>
-                <span className={FACT_K}>Experience</span>
-                <b className={FACT_V}>{parsed.years_experience ?? "—"} yrs</b>
-              </div>
-              <div className={FACT}>
-                <span className={FACT_K}>Seniority</span>
-                <b className={`${FACT_V} capitalize`}>{parsed.level}</b>
-              </div>
+              <ExperienceCounter
+                initialYears={parsed.years_experience ?? null}
+                initialLevel={parsed.level}
+                cell={FACT}
+                label={FACT_K}
+                value={FACT_V}
+              />
               <div className={FACT}>
                 <span className={FACT_K}>Based in</span>
                 <b className={`${FACT_V} capitalize`}>{parsed.home_country}</b>
