@@ -14,7 +14,6 @@ jobstash.db
 *.sqlite*
 web/seed.sql
 outbox/
-harvard/
 backups/
 # Stray .sql at the root is always a one-off dump or purge script built
 # from live rows. The Worker's own migrations are the exception.
