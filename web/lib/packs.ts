@@ -6,9 +6,9 @@
  * No server imports here: client components read it too.
  */
 export const PACKS = [
-  { id: "c3", credits: 3, php: 99 },
-  { id: "c5", credits: 5, php: 149 },
-  { id: "c12", credits: 12, php: 299 },
+  { id: "c3", credits: 3, php: 49 },
+  { id: "c5", credits: 5, php: 99 },
+  { id: "c12", credits: 12, php: 149 },
 ] as const;
 
 export type Pack = (typeof PACKS)[number];
@@ -19,7 +19,7 @@ export const FREE_CREDITS = 1;
 
 // ponytail: every pack charges this while live checkout is being tested.
 // Set to null to charge the real prices above.
-export const TEST_PRICE_PHP: number | null = 1;
+export const TEST_PRICE_PHP: number | null = null;
 
 export const chargePhp = (p: Pack) => TEST_PRICE_PHP ?? p.php;
 
