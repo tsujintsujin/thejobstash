@@ -115,7 +115,6 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Making a QR Ph code / turning a payment into credits | `web/lib/paymongo.ts createQr()` / `settle()` via `/api/pay`, `/api/pay/[id]` (the buy modal polls it), `/api/pay/webhook` |
 | Which payment methods are offered | QR Ph only, shown in our own modal (`web/app/dashboard/BuyCredits.tsx`). GCash and cards, once PayMongo approves them, need their own flows |
 | Resume file to Profile | `resume_parse.py` |
-| Resume to the Harvard format (n8n webhook, **not on the site yet**) | `harvard.py`. Gemini structures the resume, with the key in `.env.gemini` as `JOBSTASH_GEMINI_KEY`. `check_facts()` deletes any number, org, title or skill the source does not contain. `lost_skills()` retries, then `add_back()` restores anything the scorer found in the source and the result dropped. `fix_tense()` puts finished roles in the past tense. The key is **free tier**: each model has a small daily quota, so `MODELS` is a fallback chain. Enable billing before real users rely on it |
 | A user as data | `profiles.py` |
 | Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards), inside the cleanup round only |
 | Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/`. A pool still keyed on company+title is rebuilt to one row per posting the first time `db.jobs_conn()` opens it (`_rebuild_jobs`) |
@@ -194,15 +193,6 @@ D:\AIO Freelance\n8n\                 build_saas_workflow.py +
                                       ingest.py --json -> verify.py --json.
                                       Pruning (unseen 30+ days) is part of
                                       each round.
-                                      build_harvard_workflow.py +
-                                      workflows/jobstash-harvard.json
-                                      (jobstashharvard1): POST a resume
-                                      file to /webhook/jobstash-harvard,
-                                      get the Harvard PDF back ->
-                                      harvard.py --json --id <id>. Files
-                                      live in ~/.n8n-files/jobstash-harvard,
-                                      the only folder n8n 2.x file nodes
-                                      may touch.
 ```
 
 Neither is under version control. **The workflow that actually runs a resume
@@ -240,8 +230,6 @@ python deadrows.py           # what the cleanup deleted and flagged, per board
 python test_cleanup.py       # the cleanup's rules, no network
 python test_matching.py      # 67 checks
 python test_cloudflare.py    # 39 checks — the D1 shim vs real sqlite3
-python test_harvard.py       # harvard.py's guards, no network
-python harvard.py <resume> <out-dir>   # one Harvard conversion by hand
 ```
 
 To try a round without touching the live pool, point `JOBSTASH_DB` at a copy
