@@ -31,8 +31,8 @@ runs on a schedule for a user.** The only schedule is the pool's own cleanup
 (below), which keeps dead postings out of every digest.
 
 **Live at https://thejobstash.com.** Every account starts with 1 free credit;
-packs of 3 / 5 / 12 cost ₱99 / ₱149 / ₱299 through PayMongo (QR Ph). **Test
-pricing is on: every pack charges ₱1** (`web/lib/packs.ts` `TEST_PRICE_PHP`).
+packs of 3 / 5 / 12 cost ₱49 / ₱99 / ₱149 through PayMongo (QR Ph). Real prices are
+on since 2026-09-17 (`web/lib/packs.ts` `TEST_PRICE_PHP = null`).
 
 Verified 2026-09-16, after the cleanup went live: 13,271 postings, 10,697
 scored (the rest hidden for checking) · `test_cleanup.py` all pass ·
@@ -262,7 +262,7 @@ dashboard's D1 console for `jobstash`, then check `d1_migrations`.
 | R2 not enabled | `r2_buckets` is commented out at `web/wrangler.jsonc:49`. Only affects the dashboard's "download a past digest" button; the emailed PDF is unaffected. Needs a terms acceptance — Justin's call. |
 | ~~Google sign-in~~ **working** | Live and verified end to end 2026-09-12 (linked, not duplicated). The credentials reach production by Next **inlining `.env.local` at build time**, not as Cloudflare secrets — so `wrangler secret list` shows nothing and rotating them needs a rebuild. Worth moving to `wrangler secret put` eventually. `JOBSTASH_GOOGLE_REDIRECT_URI` is now a var in `wrangler.jsonc`; without it `googleRedirectUri()` silently falls back to `http://localhost:3200/...` and every production sign-in dies on `redirect_uri_mismatch`. |
 | Email | **Sign-up codes: live via Brevo** since 2026-09-15 (`web/lib/mail.ts`, Worker secret `JOBSTASH_BREVO_KEY`, sender `noreply@thejobstash.com`, domain authenticated, DMARC `p=none`). Digest mail (`mailer.py`) still references Resend and writes `.eml` to `outbox/`. See `HANDOFF-DEPLOY-EMAIL.md`. |
-| Payments | PayMongo, account TSUJIN IT SOLUTIONS. **QR Ph only**: GCash and cards read "Available after your upgrade" pending PayMongo's business-type review; they will need their own flows when approved. `TEST_PRICE_PHP = 1`. Live since 2026-09-14 (Worker version e0d876a4): `PAYMONGO_SECRET_KEY` is a Worker secret, and PayMongo webhook `hook_Hgs5ouGaoTEqCtMwyUhUQMfw` posts `payment.paid` to `https://thejobstash.com/api/pay/webhook`. |
+| Payments | PayMongo, account TSUJIN IT SOLUTIONS. **QR Ph only**: GCash and cards read "Available after your upgrade" pending PayMongo's business-type review; they will need their own flows when approved. `TEST_PRICE_PHP = null` (real prices) since 2026-09-17. Live since 2026-09-14 (Worker version e0d876a4): `PAYMONGO_SECRET_KEY` is a Worker secret, and PayMongo webhook `hook_Hgs5ouGaoTEqCtMwyUhUQMfw` posts `payment.paid` to `https://thejobstash.com/api/pay/webhook`. |
 
 ---
 
