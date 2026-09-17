@@ -31,7 +31,7 @@ runs on a schedule for a user.** The only schedule is the pool's own cleanup
 (below), which keeps dead postings out of every digest.
 
 **Live at https://thejobstash.com.** Every account starts with 1 free credit;
-packs of 3 / 5 / 12 cost ₱49 / ₱99 / ₱149 through PayMongo (QR Ph). Real prices are
+packs of 2 / 5 / 12 cost ₱49 / ₱99 / ₱149 through PayMongo (QR Ph). Real prices are
 on since 2026-09-17 (`web/lib/packs.ts` `TEST_PRICE_PHP = null`).
 
 Verified 2026-09-16, after the cleanup went live: 13,271 postings, 10,697

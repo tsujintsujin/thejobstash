@@ -6,7 +6,7 @@
  * No server imports here: client components read it too.
  */
 export const PACKS = [
-  { id: "c3", credits: 3, php: 49 },
+  { id: "c2", credits: 2, php: 49 },
   { id: "c5", credits: 5, php: 99 },
   { id: "c12", credits: 12, php: 149 },
 ] as const;
