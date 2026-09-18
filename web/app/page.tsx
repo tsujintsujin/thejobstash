@@ -144,7 +144,7 @@ const STEPS = [
 const FAQ = [
   [
     "How is this different from a job board?",
-    "A job board shows you everything and makes you filter. We do the opposite: we throw away about 96% of what we scrape and show you what's left. The discarded pile is the product — thousands of postings a day that are in the wrong country, need work authorisation you don't hold, want twice your years, or centre on tools you've never touched.",
+    "A job board shows you everything and makes you filter. We do the opposite: we throw away about 99% of the pool for any one resume and show you what's left. The discarded pile is the product — thousands of postings that are in the wrong country, need work authorisation you don't hold, want twice your years, or centre on tools you've never touched.",
   ],
   [
     "How do credits work?",
@@ -400,7 +400,11 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* the 96% */}
+      {/* the 99% — figures from the live runs table (deliveries.summary_json)
+          and the pool's posted dates, 2026-09-18: median 77 matches from a
+          ~13,000 pool, near-misses capped at 20 (delivery.NEAR_MAX), and
+          157-664 new postings a day over the week before. Re-check them
+          against the data before changing the copy. */}
       <section className="band">
         <div className="wrap">
           <div
@@ -410,7 +414,7 @@ export default async function Home() {
             <div>
               <span className="eyebrow">The part nobody else does</span>
               <h2 className="text-h2 mt-5 mb-4">
-                We throw away 96% of what we find.
+                We throw away 99% of what we find.
               </h2>
               <p className="lede mb-3.5">
                 Most job tools optimise for how much they can show you. That
@@ -428,21 +432,21 @@ export default async function Home() {
                 survives is lime, and the absolute at the bottom is ink. */}
             <div className="grid gap-3">
               <div className="card bg-sun">
-                <b className="text-[30px] tracking-[-0.03em]">~1,000</b>
+                <b className="text-[30px] tracking-[-0.03em]">~400</b>
                 <p className="text-sm font-bold mt-1">
                   new postings a day across the boards
                 </p>
               </div>
               <div className="card bg-lime">
-                <b className="text-[30px] tracking-[-0.03em]">~20</b>
+                <b className="text-[30px] tracking-[-0.03em]">~80</b>
                 <p className="text-sm font-bold mt-1">
                   survive scoring against one resume
                 </p>
               </div>
               <div className="card bg-ink text-bone">
-                <b className="text-[30px] tracking-[-0.03em]">~10</b>
+                <b className="text-[30px] tracking-[-0.03em]">20</b>
                 <p className="text-sm font-bold mt-1">
-                  came close, with the reason attached
+                  closest misses, each with the reason it missed
                 </p>
               </div>
             </div>
