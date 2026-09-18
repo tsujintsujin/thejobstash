@@ -2,9 +2,20 @@ import { redirect } from "next/navigation";
 import { currentUser, safeNext } from "@/lib/session";
 import { googleConfigured } from "@/lib/google";
 import { poolStats } from "@/lib/db";
+import { pageMeta } from "@/lib/site";
 import AuthCard from "./AuthCard";
 
 export const dynamic = "force-dynamic";
+
+// ?mode=signin is the same page with the other tab open, so both canonicalise
+// here rather than splitting into two indexed URLs.
+export const metadata = pageMeta({
+  title: "Create a free account",
+  path: "/signup",
+  description:
+    "Sign up free and your first run is on us: upload a resume and see which " +
+    "live job postings actually fit it. No card, no subscription.",
+});
 
 export default async function Auth({
   searchParams,

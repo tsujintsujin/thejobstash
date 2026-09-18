@@ -308,6 +308,66 @@ export async function poolStats() {
   };
 }
 
+export type PoolExample = {
+  title: string;
+  company: string;
+  source: string;
+  location: string;
+  salary: string;
+  posted: string;
+};
+
+export type PoolPage = {
+  slug: string;
+  name: string;
+  total: number;
+  fresh: number;
+  remote: number;
+  with_pay: number;
+  examples: PoolExample[];
+  updated_at: string;
+};
+
+/**
+ * The public /jobs pages, one row per role family, written by pool_pages.py
+ * after every cleanup round. Aggregates only: the pool stays on the scoring
+ * machine. A family that fell under the minimum is deleted by the push, so a
+ * missing row is a real 404.
+ */
+export async function poolPages(): Promise<Omit<PoolPage, "examples">[]> {
+  // Fails soft: the home page reads this, and a missing table (migration 0006
+  // not yet applied) must cost it the "browse" links, not the whole page.
+  try {
+    const { results } = await db()
+      .prepare(
+        "SELECT slug,name,total,fresh,remote,with_pay,updated_at FROM pool_pages"
+      )
+      .all<any>();
+    return results ?? [];
+  } catch (e) {
+    console.error("poolPages failed", e);
+    return [];
+  }
+}
+
+export async function poolPage(slug: string): Promise<PoolPage | null> {
+  let row: any = null;
+  try {
+    row = await db()
+      .prepare("SELECT * FROM pool_pages WHERE slug=?")
+      .bind(slug)
+      .first<any>();
+  } catch (e) {
+    console.error("poolPage failed", e);
+  }
+  if (!row) return null;
+  let examples: PoolExample[] = [];
+  try {
+    examples = JSON.parse(row.examples);
+  } catch {}
+  return { ...row, examples };
+}
+
 /**
  * A sliding-window attempt counter, for sign-in and sign-up.
  *

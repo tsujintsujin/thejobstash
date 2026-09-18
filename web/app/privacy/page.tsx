@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import { LegalBody, LegalHeader } from "@/app/legal/shell";
 import { PRIVACY, PRIVACY_SUMMARY } from "@/app/legal/privacy";
 
-export const metadata: Metadata = {
-  title: "Privacy Policy — TheJobStash",
+export const metadata: Metadata = pageMeta({
+  title: "Privacy Policy",
+  path: "/privacy",
   description:
     "What TheJobStash collects, why, who it goes to, how long it is kept, " +
     "and how to get it deleted. Written against what the code actually does.",
-};
+});
 
 export default function PrivacyPage() {
   return (

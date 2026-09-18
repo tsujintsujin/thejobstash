@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import { LegalBody, LegalHeader } from "@/app/legal/shell";
 import { TERMS, TERMS_SUMMARY } from "@/app/legal/terms";
 
-export const metadata: Metadata = {
-  title: "Terms of Service — TheJobStash",
+export const metadata: Metadata = pageMeta({
+  title: "Terms of Service",
+  path: "/terms",
   description:
     "The agreement for using TheJobStash: what the service promises, what it " +
     "explicitly does not, and what happens when either of us walks away.",
-};
+});
 
 export default function TermsPage() {
   return (
