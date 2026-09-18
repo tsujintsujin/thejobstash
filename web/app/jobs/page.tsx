@@ -6,12 +6,12 @@ import { JsonLd, SITE_URL, pageMeta } from "@/lib/site";
 export const dynamic = "force-dynamic";
 
 export const metadata = pageMeta({
-  title: "Jobs in the Philippines by role — remote and onsite",
+  title: "Job openings in the Philippines by role — online, WFH and onsite",
   path: "/jobs",
   description:
-    "Live job postings open to people in the Philippines, grouped by the " +
-    "kind of work: virtual assistant, customer service, accounting, " +
-    "development, design and more. Checked every few hours.",
+    "Live job openings in the Philippines, grouped by the kind of work: " +
+    "online and work-from-home, part-time, entry-level, non-voice, virtual " +
+    "assistant, customer service, accounting and more. Checked every few hours.",
 });
 
 const n = (x: number) => x.toLocaleString("en-US");

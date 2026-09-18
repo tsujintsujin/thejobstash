@@ -11,7 +11,7 @@ export function GET() {
 
 > A job matcher for people in the Philippines. Upload a resume once; each run scores thousands of live job postings against it and returns the ones worth applying to, plus the near-misses and exactly what blocked each one.
 
-- Covers remote roles open to people in the Philippines and local Philippine roles.
+- Covers online and work-from-home roles open to people in the Philippines (including part-time, entry-level and non-voice work) and local Philippine roles.
 - Closed postings are cleared out every few hours.
 - What a run checks: skills, seniority, location, work authorisation and timezone.
 - Pricing: every account starts with ${FREE_CREDITS} free run. After that, credit packs: ${packs}. One credit is one run. No subscription; credits do not expire. Payment by QR Ph (GCash, Maya, bank apps).

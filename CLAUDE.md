@@ -12,6 +12,7 @@ structural:
 | `HANDOFF-DEPLOY-EMAIL.md` | 2026-09-14/15: moving deploys behind GitHub, removing every PC → Cloudflare path, the Google popup fix, Brevo email + DNS. Hurdles, fixes, and what to do better. |
 | `HANDOFF-CLEANUP.md` | 2026-09-16: the cleanup workflow - why dead postings reached digests, the freshList / verify design, what each board does when the verifier opens it, and the first real round's numbers. Read before touching `ingest.py`, `verify.py` or the pool's `status`. |
 | `HANDOFF-DIGEST-BOXES.md` | 2026-09-16: why the cap of 20 went, how the three boxes were arrived at and what shapes were rejected, the measured costs, and the two bugs found by reading rather than testing. Read before changing what a digest holds or how the Stash row is drawn. |
+| `HANDOFF-SEO.md` | 2026-09-18: which searches each page targets (from Google PH autocomplete), why part-time / no-experience / non-voice read posting text, the Search Console and Bing setup, and what only Justin can do (links). Read before renaming a page or changing a title. |
 | `PLAN-REBUILD.md` | **Draft, not built.** The eight-phase implementation plan for that spec plus the move from time-boxed plans to credits. Each phase has an exit test. **Phases 7–8 were settled and built 2026-09-14:** credits replace plans and the daily digest is gone. |
 
 Anything in `HANDOFF.md` about Supabase, "no tunnel", or the 1,760-job pool is
@@ -117,7 +118,7 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Resume file to Profile | `resume_parse.py` |
 | A user as data | `profiles.py` |
 | Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards), inside the cleanup round only |
-| The public `/jobs/<slug>` pages (SEO) | Counts + 12 example postings per role family: `pool_pages.py` (families, PH-or-remote filter, `MIN_TOTAL = 25`), pushed to D1 `pool_pages` after every `pool_stats` push. Words per page: `web/lib/roles.ts`, slugs must match. Aggregates only, the pool stays local |
+| The public `/jobs/<slug>` pages (SEO) | Counts + 12 example postings per role family: `pool_pages.py` (families, PH-or-remote filter, `MIN_TOTAL = 25`; part-time / no-experience / non-voice also match the posting text via `_DESC`), pushed to D1 `pool_pages` after every `pool_stats` push. Words per page: `web/lib/roles.ts`, slugs must match. Aggregates only, the pool stays local |
 | Page metadata, canonicals, JSON-LD | `web/lib/site.tsx pageMeta()` — every indexable page goes through it so none ships without a canonical. `app/robots.ts`, `app/sitemap.ts` (reads `pool_pages`), `app/llms.txt`. Home JSON-LD prices come from `packs.ts` |
 | Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/`. A pool still keyed on company+title is rebuilt to one row per posting the first time `db.jobs_conn()` opens it (`_rebuild_jobs`) |
 

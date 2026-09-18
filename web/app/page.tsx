@@ -8,7 +8,6 @@ import {
   JsonLd,
   SITE_DESCRIPTION,
   SITE_NAME,
-  SITE_TAGLINE,
   SITE_URL,
   pageMeta,
 } from "@/lib/site";
@@ -19,7 +18,7 @@ import UploadModal from "./UploadModal";
 export const dynamic = "force-dynamic";
 
 export const metadata = pageMeta({
-  title: `${SITE_NAME} — ${SITE_TAGLINE.toLowerCase()}`,
+  title: `Online jobs in the Philippines, matched to your resume — ${SITE_NAME}`,
   absolute: true,
   path: "/",
   description: SITE_DESCRIPTION,
@@ -165,6 +164,10 @@ const FAQ = [
     "You get a shorter digest that says so plainly, with the near-misses and their reasons. It still uses the credit, because the scoring happened, but we'd rather hand you a short honest list than pad it with roles that don't fit. A run that fails outright gives the credit back.",
   ],
   [
+    "Are these jobs legit?",
+    "Every posting is a real, public job ad, and each one is re-checked every few hours: when an employer takes it down or it stops loading, it leaves the pool. What we don't do is vouch for the employer, so apply the usual rule. A real employer never asks you to pay to apply, to be trained or to get the job. If a posting does, skip it.",
+  ],
+  [
     "Do I need to link any accounts?",
     "No. No bank, no LinkedIn, no OAuth scopes. A resume file and an email address.",
   ],
@@ -195,7 +198,7 @@ export default async function Home() {
         >
           <div>
             <span className="eyebrow bg-lime text-ink">
-              The job list for people who hate job hunting
+              Online and work-from-home jobs in the Philippines
             </span>
             <h1 className="text-display mt-[26px] mb-[18px]">
               Stop scrolling.
@@ -204,8 +207,8 @@ export default async function Home() {
             </h1>
             <p className="lede opacity-95 mb-[30px]">
               Upload your resume once. Each time you run it, we score
-              thousands of live postings, remote and in the Philippines, against
-              it and hand you the handful
+              thousands of live postings, online, work-from-home and across the
+              Philippines, against it and hand you the handful
               worth your time — plus the ones that came close, and exactly what
               blocked them. Closed postings are cleared out every few hours.
             </p>

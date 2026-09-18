@@ -9,10 +9,12 @@ import type { Metadata } from "next";
 export const SITE_URL = "https://thejobstash.com";
 export const SITE_NAME = "TheJobStash";
 export const SITE_TAGLINE = "Jobs that actually match your resume";
+// Says "online", "work-from-home" and "Philippines" because that is what
+// people here type into Google; see HANDOFF-SEO.md for the searches.
 export const SITE_DESCRIPTION =
-  "Upload your resume once. Each run scores thousands of live job postings " +
-  "against it, remote and Philippine roles alike, and hands " +
-  "you the handful worth applying to, plus the ones that came close and why.";
+  "Online and work-from-home jobs in the Philippines, matched to your " +
+  "resume. Upload it once and see which live postings fit, and what " +
+  "blocks the rest. First run free.";
 
 const OG_IMAGE = {
   url: "/opengraph-image.png",
