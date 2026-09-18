@@ -25,7 +25,14 @@ sys.path.insert(0, HERE)
 # "medical virtual assistant" belongs on both pages. `remote` matches the
 # location instead of the title. Order is the order of the /jobs index.
 FAMILIES = [
-    ("remote", "Remote and work-from-home", None),
+    ("remote", "Online and work-from-home", None),
+    ("part-time", "Part-time", r"part[- ]?time|\bpart timer\b"),
+    ("no-experience", "Entry-level and no-experience",
+     r"entry[- ]level|no experience|fresh grad|\btrainee\b|\bjunior\b|"
+     r"\bintern(ship)?\b|beginner"),
+    ("non-voice", "Non-voice",
+     r"non[- ]?voice|chat support|email support|chat (agent|moderator)|"
+     r"e-?mail (agent|specialist)|back ?office|data entry"),
     ("virtual-assistant", "Virtual assistant",
      r"virtual assistant|\bva\b|executive assistant|personal assistant"),
     ("customer-service", "Customer service",
@@ -63,6 +70,28 @@ FAMILIES = [
      r"desktop support"),
 ]
 _PATTERNS = {s: re.compile(p, re.I) for s, _, p in FAMILIES if p}
+
+# Part-time, no experience and non-voice are how people in the Philippines
+# search ("part time online jobs", "wfh no experience", "non voice"), but a
+# title rarely says so. These families also read the posting's own text, and
+# a senior title or an explicit "not entry-level" keeps a posting off.
+_DESC = {s: re.compile(p, re.I) for s, p in [
+    ("part-time",
+     r"part[- ]?time job (summary|overview)|"
+     r"(job|employment|work|position) type\s*:?\s*part[- ]?time|"
+     r"type of work\s*:?\s*part[- ]?time|"
+     r"\bpart[- ]?time (role|position|job|opportunity|contract)\b"),
+    ("no-experience",
+     r"no (prior |previous )?(work |sales )?experience (is )?(required|needed|necessary)|"
+     r"fresh graduates? (are )?(welcome|may apply|can apply)|"
+     r"open to fresh grad|entry[- ]level (role|position)"),
+    ("non-voice", r"non[- ]?voice"),
+]}
+# A senior title keeps a posting off the no-experience page whatever its
+# text says; the text can only rule itself out explicitly.
+_NOT_TITLE = {"no-experience": re.compile(
+    r"\bsenior\b|\bsr\b|\blead\b|manager|director|\bhead\b|experienced", re.I)}
+_NOT_DESC = {"no-experience": re.compile(r"not an? entry[- ]level", re.I)}
 
 REMOTE = re.compile(r"remote|work from home|\bwfh\b|anywhere|worldwide", re.I)
 PH = re.compile(r"philippines|manila|cebu|davao|makati|taguig|quezon|pasig", re.I)
@@ -123,7 +152,15 @@ def families_of(job):
     """Every family slug a posting belongs to."""
     out = ["remote"] if is_remote(job) else []
     title = job.get("title") or ""
-    out += [s for s, p in _PATTERNS.items() if p.search(title)]
+    desc = job.get("description") or ""
+    for s, p in _PATTERNS.items():
+        if not (p.search(title) or (s in _DESC and _DESC[s].search(desc))):
+            continue
+        if s in _NOT_TITLE and _NOT_TITLE[s].search(title):
+            continue
+        if s in _NOT_DESC and _NOT_DESC[s].search(desc):
+            continue
+        out.append(s)
     return out
 
 
@@ -193,7 +230,8 @@ def compute():
              - datetime.timedelta(days=FRESH_DAYS)
              ).strftime("%Y-%m-%d")
     jobs = (dict(r) for r in db.jobs_conn().execute(
-        "SELECT title,company,source,location,salary,posted,first_seen FROM jobs WHERE "
+        "SELECT title,company,source,location,salary,posted,first_seen,description "
+        "FROM jobs WHERE "
         + ingest.SCORED))
     return build(jobs, since)
 
@@ -231,6 +269,17 @@ def _check():
         == ["remote", "virtual-assistant", "healthcare"]
     assert families_of(j("Account Executive", "Makati")) == ["sales"]
     assert not eligible(j("Accountant", "Berlin"))
+    # Families read from the posting's text, and what keeps a posting off them.
+    assert "part-time" in families_of(j("Bookkeeper", "Cebu",
+        description="Accounting Part time Job Summary: ..."))
+    assert "no-experience" in families_of(j("Sales Agent", "Remote",
+        description="No prior sales experience required."))
+    assert "no-experience" not in families_of(j("Senior Accountant", "Remote",
+        description="Fresh graduates welcome"))
+    assert "no-experience" not in families_of(j("Credit VA", "Remote",
+        description="This is not an entry-level position."))
+    assert "non-voice" in families_of(j("CSR", "Pampanga", description="NON-VOICE account"))
+    assert "non-voice" in families_of(j("Data Entry Clerk", "Manila"))
     assert eligible(j("Accountant", "Cebu City")) and eligible(j("Dev", "Worldwide"))
     base = [j("Bookkeeper %d" % i, "Philippines (remote)", company="C%d" % i,
               salary="" if i % 2 else "PHP 30000", first_seen="2026-09-0%d" % (i % 9 + 1))

@@ -20,11 +20,12 @@ export type RoleCopy = {
 
 export const ROLE_COPY: Record<string, RoleCopy> = {
   remote: {
-    plural: "Remote and work-from-home",
+    plural: "Online and work-from-home",
     intro:
-      "Most of the pool is remote work open to people in the Philippines: " +
-      "roles posted by overseas companies, and local employers hiring for " +
-      "work-from-home. Remote does not mean anywhere, though. A lot of " +
+      "Most of the pool is online, home-based work open to people in the " +
+      "Philippines: remote roles posted by overseas companies, and local " +
+      "employers hiring for work-from-home. Remote does not mean anywhere, " +
+      "though. A lot of " +
       "'remote' postings quietly limit who can apply by country, timezone or " +
       "work authorisation, and that is where most applications are wasted.",
     asks: [
@@ -37,6 +38,68 @@ export const ROLE_COPY: Record<string, RoleCopy> = {
       "Remote, but only for residents of one country",
       "A shift window you cannot cover from Philippine time",
       "Work authorisation you do not hold (common on US-based boards)",
+    ],
+  },
+  "part-time": {
+    plural: "Part-time",
+    intro:
+      "Part-time online work is what students, parents and anyone with a " +
+      "day job look for, and most of it is remote: a few hours a day of " +
+      "admin, appointment setting, social media or bookkeeping for an " +
+      "overseas business. 'Part-time' on a posting can mean four hours a " +
+      "day or twenty a week on a fixed shift, so the hours and the time " +
+      "zone matter more than the title.",
+    asks: [
+      "A fixed block of hours, often on a US or Australian schedule",
+      "Your own computer and a stable connection",
+      "The same tools a full-time hire would use, just fewer hours",
+      "Clear written English for updates while you are offline",
+    ],
+    blockers: [
+      "A shift in a time zone that clashes with a day job or classes",
+      "Years of experience asked for even on a small role",
+      "A named tool the whole role runs on",
+    ],
+  },
+  "no-experience": {
+    plural: "Entry-level and no-experience",
+    intro:
+      "These are the postings that say it outright: entry-level, trainee, " +
+      "junior, fresh graduates welcome, or no experience required. Most are " +
+      "work-from-home. They are fewer than they look on a job board, " +
+      "because plenty of 'entry-level' roles still ask for a year or two, " +
+      "and a posting that asks for one tool you have not used will pass " +
+      "over a fresh graduate for someone who has.",
+    asks: [
+      "Proof you can do the basics: a portfolio, sample work or a short test",
+      "Willingness to train on the employer's tools and process",
+      "Reliable internet and a quiet place to work",
+      "Good written English, since most early work is written",
+    ],
+    blockers: [
+      "'Entry-level' that still asks for one to two years",
+      "A named tool or platform you have not used",
+      "Shift hours you cannot cover",
+    ],
+  },
+  "non-voice": {
+    plural: "Non-voice",
+    intro:
+      "Non-voice work is chat and email support, data entry, back office " +
+      "and similar roles with no phone calls. It is what many people look " +
+      "for after a voice account, or when a home setup cannot take calls. " +
+      "The work is written, so typing speed, written English and the " +
+      "account's tools decide who gets hired.",
+    asks: [
+      "Chat or email support experience, or data entry accuracy",
+      "Helpdesk or CRM tools such as Zendesk, Freshdesk or HubSpot",
+      "Typing speed and clear written English",
+      "Night-shift availability for US accounts",
+    ],
+    blockers: [
+      "A named helpdesk or CRM tool you have not used",
+      "Onsite roles outside your city",
+      "Night shifts you cannot cover",
     ],
   },
   "virtual-assistant": {

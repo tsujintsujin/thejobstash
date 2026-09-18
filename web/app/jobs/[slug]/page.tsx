@@ -23,10 +23,8 @@ const day = (iso: string) =>
       })
     : "";
 
-function heading(slug: string, plural: string) {
-  return slug === "remote"
-    ? "Remote and work-from-home jobs in the Philippines"
-    : `${plural} jobs in the Philippines`;
+function heading(plural: string) {
+  return `${plural} jobs in the Philippines`;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -35,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!page) return { title: "Not found", robots: { index: false } };
   const c = copyFor(slug, page.name);
   return pageMeta({
-    title: heading(slug, c.plural),
+    title: heading(c.plural),
     path: `/jobs/${slug}`,
     description:
       `${n(page.total)} live ${c.plural.toLowerCase()} postings open to people ` +
@@ -49,7 +47,7 @@ export default async function RolePage({ params }: Props) {
   const [page, all] = await Promise.all([poolPage(slug), poolPages()]);
   if (!page) notFound();
   const c = copyFor(slug, page.name);
-  const h1 = heading(slug, c.plural);
+  const h1 = heading(c.plural);
   const related = ROLE_ORDER.filter(
     (s) => s !== slug && all.some((p) => p.slug === s)
   );
