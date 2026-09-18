@@ -118,6 +118,13 @@ def push_pool_stats(total, with_desc):
         conn.close()
     except Exception as e:                      # noqa: BLE001
         sys.stderr.write("[ingest] pool_stats push failed: %s\n" % e)
+    # The public /jobs pages. Its own try: a failure here must not cost the
+    # home page its numbers, and stale pages beat missing ones.
+    try:
+        import pool_pages
+        pool_pages.push()
+    except Exception as e:                      # noqa: BLE001
+        sys.stderr.write("[ingest] pool_pages push failed: %s\n" % e)
 
 
 def take_lock():

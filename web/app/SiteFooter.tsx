@@ -59,7 +59,7 @@ export default function SiteFooter() {
         <div className="wrap flex items-center justify-between gap-3.5 flex-wrap">
           <Brand size="text-[17px]" />
           <nav className="flex gap-4 gap-y-1 text-xs font-bold flex-wrap">
-            <Link href="/#how" className={LINK}>How it works</Link>
+            <Link href="/how-it-works" className={LINK}>How it works</Link>
             <Link href="/#pricing" className={LINK}>Pricing</Link>
             <Link href="/#faq" className={LINK}>FAQ</Link>
             {/* The slim footer is the ONLY footer on /signup and /login, so
@@ -123,9 +123,11 @@ export default function SiteFooter() {
               <a href={SUPPORT} className={LINK}>Support</a>
             </div>
             <div className="grid gap-[7px] content-start">
-              <Link href="/#how" className={LINK}>How it works</Link>
+              <Link href="/how-it-works" className={LINK}>How it works</Link>
+              <Link href="/jobs" className={LINK}>Jobs by role</Link>
               <Link href="/#pricing" className={LINK}>Pricing</Link>
               <Link href="/#faq" className={LINK}>FAQ</Link>
+              <Link href="/about" className={LINK}>About</Link>
             </div>
             <div className="grid gap-[7px] content-start">
               <Link href="/privacy" className={LINK}>Privacy</Link>

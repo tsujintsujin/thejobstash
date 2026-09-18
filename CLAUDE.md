@@ -117,6 +117,8 @@ Read this before changing product behaviour. Most of it is Python, not TS.
 | Resume file to Profile | `resume_parse.py` |
 | A user as data | `profiles.py` |
 | Scraping the pool | `ingest.py` -> `JobHunt/sources.py` (13 boards), inside the cleanup round only |
+| The public `/jobs/<slug>` pages (SEO) | Counts + 12 example postings per role family: `pool_pages.py` (families, PH-or-remote filter, `MIN_TOTAL = 25`), pushed to D1 `pool_pages` after every `pool_stats` push. Words per page: `web/lib/roles.ts`, slugs must match. Aggregates only, the pool stays local |
+| Page metadata, canonicals, JSON-LD | `web/lib/site.tsx pageMeta()` — every indexable page goes through it so none ships without a canonical. `app/robots.ts`, `app/sitemap.ts` (reads `pool_pages`), `app/llms.txt`. Home JSON-LD prices come from `packs.ts` |
 | Schema | `db.py` — `jobs users profiles payments runs deliveries trial_runs sessions`; live D1 changes go in `web/migrations/`. A pool still keyed on company+title is rebuilt to one row per posting the first time `db.jobs_conn()` opens it (`_rebuild_jobs`) |
 
 `api_bridge.py` is the JSON contract between the site and the Python; the

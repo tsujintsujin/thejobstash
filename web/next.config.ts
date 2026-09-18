@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
   // tracing root here stops the bundler walking up into it and resolving the
   // wrong copy of Next.
   outputFileTracingRoot: __dirname,
+  // No reason to advertise the framework in every response header.
+  poweredByHeader: false,
   // No page here is meant to be framed. Without these, another site could lay
   // the dashboard under a decoy and have a signed-in user press Run or Buy.
   async headers() {

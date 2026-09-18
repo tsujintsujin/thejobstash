@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/site";
 import Link from "next/link";
 import {
   LegalBody,
@@ -10,12 +11,13 @@ import {
   CONTACT_EMAIL,
 } from "@/app/legal/shell";
 
-export const metadata: Metadata = {
-  title: "Refund Policy — TheJobStash",
+export const metadata: Metadata = pageMeta({
+  title: "Refund Policy",
+  path: "/refunds",
   description:
     "When a run is refunded: automatically if it fails, and on request if the " +
     "digest file you were sent is broken.",
-};
+});
 
 const MAIL = (
   <a href={`mailto:${CONTACT_EMAIL}`} className="underline">

@@ -1,12 +1,89 @@
 import Link from "next/link";
-import { poolStats } from "@/lib/db";
+import { poolPages, poolStats } from "@/lib/db";
 import { currentUser } from "@/lib/session";
 import { googleConfigured } from "@/lib/google";
 import { FREE_CREDITS, PACKS, TEST_PRICE_PHP, chargePhp } from "@/lib/packs";
+import { ROLE_ORDER, copyFor } from "@/lib/roles";
+import {
+  JsonLd,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_URL,
+  pageMeta,
+} from "@/lib/site";
+import { CONTACT_EMAIL, OPERATOR } from "./legal/shell";
 import AuthModal from "./AuthModal";
 import UploadModal from "./UploadModal";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = pageMeta({
+  title: `${SITE_NAME} — ${SITE_TAGLINE.toLowerCase()}`,
+  absolute: true,
+  path: "/",
+  description: SITE_DESCRIPTION,
+});
+
+/** Organization, WebSite, the product with its real prices, and the FAQ.
+ *  Prices come from packs.ts and the answers from FAQ, so none can drift. */
+function structuredData(faq: string[][]) {
+  const org = `${SITE_URL}/#organization`;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": org,
+        name: SITE_NAME,
+        legalName: OPERATOR,
+        url: SITE_URL,
+        logo: `${SITE_URL}/icon.png`,
+        email: CONTACT_EMAIL,
+        areaServed: { "@type": "Country", name: "Philippines" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_URL}/#website`,
+        name: SITE_NAME,
+        url: SITE_URL,
+        inLanguage: "en-PH",
+        publisher: { "@id": org },
+      },
+      {
+        "@type": "WebApplication",
+        name: SITE_NAME,
+        url: SITE_URL,
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Any (web browser)",
+        description: SITE_DESCRIPTION,
+        provider: { "@id": org },
+        offers: [
+          {
+            "@type": "Offer",
+            name: `${FREE_CREDITS} free run`,
+            price: 0,
+            priceCurrency: "PHP",
+          },
+          ...PACKS.map((p) => ({
+            "@type": "Offer",
+            name: `${p.credits} credits`,
+            price: p.php,
+            priceCurrency: "PHP",
+          })),
+        ],
+      },
+      {
+        "@type": "FAQPage",
+        mainEntity: faq.map(([q, a]) => ({
+          "@type": "Question",
+          name: q,
+          acceptedAnswer: { "@type": "Answer", text: a },
+        })),
+      },
+    ],
+  };
+}
 
 /* Layout patterns repeated across the page. Kept as constants rather than
    component classes because they are pure layout — no colour decision lives
@@ -18,8 +95,10 @@ const G3 =
 const STAT = "border-3 border-ink shadow-brut text-ink px-5 py-[18px]";
 const STAT_N =
   "block text-[38px] font-extrabold tracking-[-0.03em] leading-none";
+// Full ink, no opacity: at 11px the faded label failed contrast on sun and
+// coral (Lighthouse, 2026-09-17).
 const STAT_L =
-  "text-[11px] font-extrabold uppercase tracking-[0.09em] opacity-70";
+  "text-[11px] font-extrabold uppercase tracking-[0.09em]";
 const SCORE =
   "border-2 border-ink bg-jade text-ink text-xs font-extrabold px-2.5 py-[3px] whitespace-nowrap";
 
@@ -69,7 +148,9 @@ const FAQ = [
   ],
   [
     "How do credits work?",
-    "One credit is one run: we score every posting in the pool against your resume and hand you the digest. The pool is re-swept from the boards whenever it is more than 30 minutes old. Every account starts with one free. After that you buy a pack of 3, 5 or 12 through PayMongo. No subscription, nothing recurring, and credits don't expire.",
+    // Pack sizes and prices from packs.ts: this answer is also the FAQPage
+    // structured data, so a stale figure here would be served to Google too.
+    `One credit is one run: we score every live posting in the pool against your resume and hand you the digest. The pool itself is refreshed from the boards every few hours, whether anyone runs or not. Every account starts with ${FREE_CREDITS} free. After that you buy a pack of ${PACKS.map((p) => `${p.credits} for ₱${p.php}`).join(", ")} through PayMongo. No subscription, nothing recurring, and credits don't expire.`,
   ],
   [
     "What does 'came close' mean?",
@@ -94,12 +175,16 @@ const FAQ = [
 ];
 
 export default async function Home() {
-  const stats = await poolStats();
+  const [stats, roles] = await Promise.all([poolStats(), poolPages()]);
   const user = await currentUser();
   const googleReady = googleConfigured();
+  const browse = ROLE_ORDER.map((s) => roles.find((r) => r.slug === s)).filter(
+    (r): r is (typeof roles)[number] => !!r
+  );
 
   return (
     <main>
+      <JsonLd data={structuredData(FAQ)} />
       {/* hero — the identity band above the fold. Lime rather than the action
           colour on the eyebrow and the card shadow: the hero states the
           promise, and flare is held back for the thing you press. */}
@@ -119,7 +204,8 @@ export default async function Home() {
             </h1>
             <p className="lede opacity-95 mb-[30px]">
               Upload your resume once. Each time you run it, we score
-              thousands of live postings against it and hand you the handful
+              thousands of live postings, remote and in the Philippines, from
+              13 job boards against it and hand you the handful
               worth your time — plus the ones that came close, and exactly what
               blocked them. Closed postings are cleared out every few hours.
             </p>
@@ -138,11 +224,13 @@ export default async function Home() {
                   sources={stats.sources}
                 />
               )}
-              <Link href="#how" className="btn btn-paper">
+              <Link href="/how-it-works" className="btn btn-paper">
                 See how it works
               </Link>
             </div>
-            <p className="text-[13px] mt-[18px] opacity-80">
+            {/* No opacity: bone on azure is 4.98:1 at full strength and
+                under 4.5 once faded, which failed at this size. */}
+            <p className="text-[13px] mt-[18px]">
               Free account, and your first run is on us. No card, no
               subscription.
             </p>
@@ -253,11 +341,39 @@ export default async function Home() {
               <b className={STAT_N}>{stats.sources}</b>
               <span className={STAT_L}>Boards swept</span>
             </div>
+            {/* Was "~20 per digest", which stopped being true when the cap
+                of 20 went (HANDOFF-DIGEST-BOXES.md). A figure under "not a
+                marketing figure" has to be one the code guarantees. */}
             <div className={`${STAT} bg-lime`}>
-              <b className={STAT_N}>~20</b>
-              <span className={STAT_L}>Per digest</span>
+              <b className={STAT_N}>{FREE_CREDITS}</b>
+              <span className={STAT_L}>Free run to start</span>
             </div>
           </div>
+          {/* Browse — the home page's links into /jobs. Search engines reach
+              the role pages through here; a page nothing links to barely ranks. */}
+          {browse.length > 0 && (
+            <div className="mt-9">
+              <h2 className="text-h3 mb-3.5">Browse by kind of work</h2>
+              <ul className="flex flex-wrap gap-2 list-none p-0">
+                {browse.map((r) => (
+                  <li key={r.slug}>
+                    <Link
+                      href={`/jobs/${r.slug}`}
+                      className="tag no-underline hover:bg-sun"
+                    >
+                      {copyFor(r.slug, r.name).plural} ·{" "}
+                      {r.total.toLocaleString()}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <Link href="/jobs" className="tag bg-ink text-bone no-underline">
+                    All roles →
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          )}
         </div>
       </section>
 
@@ -340,8 +456,8 @@ export default async function Home() {
           <span className="eyebrow">Credits</span>
           <h2 className="text-h2 mt-5 mb-2.5">Pay per run, not a subscription.</h2>
           <p className="lede mb-[30px]">
-            One credit is one run of your resume: the boards swept, every posting
-            scored, your digest handed over. Every account starts with{" "}
+            One credit is one run of your resume: every live posting scored,
+            your digest handed over. Every account starts with{" "}
             {FREE_CREDITS} free. Nothing recurs, and credits don&rsquo;t expire.
           </p>
           <div className={G3}>
@@ -364,7 +480,7 @@ export default async function Home() {
                   {[
                     `${p.credits} runs of your resume`,
                     `About ₱${Math.round(p.php / p.credits)} a run`,
-                    "Jobs swept within 30 minutes of your run",
+                    "Scored against a pool refreshed every few hours",
                     "Pay with QR Ph: GCash, Maya or your bank app",
                   ].map((l) => (
                     <li
