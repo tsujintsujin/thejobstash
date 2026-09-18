@@ -11,7 +11,7 @@ export const SITE_NAME = "TheJobStash";
 export const SITE_TAGLINE = "Jobs that actually match your resume";
 export const SITE_DESCRIPTION =
   "Upload your resume once. Each run scores thousands of live job postings " +
-  "from 13 boards against it, remote and Philippine roles alike, and hands " +
+  "against it, remote and Philippine roles alike, and hands " +
   "you the handful worth applying to, plus the ones that came close and why.";
 
 const OG_IMAGE = {

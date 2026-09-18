@@ -11,7 +11,7 @@ export const metadata = pageMeta({
   description:
     "Live job postings open to people in the Philippines, grouped by the " +
     "kind of work: virtual assistant, customer service, accounting, " +
-    "development, design and more. From 13 boards, checked every few hours.",
+    "development, design and more. Checked every few hours.",
 });
 
 const n = (x: number) => x.toLocaleString("en-US");
@@ -41,8 +41,7 @@ export default async function JobsIndex() {
             Jobs in the Philippines, by kind of work
           </h1>
           <p className="lede mb-7">
-            {n(stats.pool)} live postings from {stats.sources} job boards,
-            remote and onsite, with closed ones cleared out every few hours.
+            {n(stats.pool)} live postings, remote and onsite, with closed ones cleared out every few hours.
             Pick a kind of work to see what is open, or upload your resume and
             let a run find the ones that fit you.
           </p>

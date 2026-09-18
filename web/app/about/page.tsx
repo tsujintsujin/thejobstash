@@ -41,14 +41,12 @@ export default function About() {
           <h2 className="text-h3 mb-3">Why it exists</h2>
           <P>
             Finding work from the Philippines means reading the same kinds of
-            postings on JobStreet, OnlineJobs.ph, Kalibrr and a dozen remote
-            boards, most of which you cannot get: the wrong country, a
+            postings across job sites, most of which you cannot get: the wrong country, a
             timezone you cannot cover, twice your years, or a tool you have
             never touched. The time goes into reading postings, not applying.
           </P>
           <P>
-            So this does the reading. It keeps a pool of live postings from 13
-            boards, clears out the closed ones every few hours, and scores the
+            So this does the reading. It keeps a pool of live postings, clears out the closed ones every few hours, and scores the
             whole pool against your resume when you ask it to. You get the
             short list worth applying to, and the ones that came close with
             the reason attached.

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { P, Rows } from "@/app/legal/shell";
 import { poolStats } from "@/lib/db";
 import { FREE_CREDITS, PACKS } from "@/lib/packs";
-import { BOARD_NAMES } from "@/lib/roles";
 import { JsonLd, SITE_URL, pageMeta } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +10,7 @@ export const metadata = pageMeta({
   title: "How it works: how jobs are matched to your resume",
   path: "/how-it-works",
   description:
-    "How TheJobStash gathers postings from 13 job boards, clears out closed " +
+    "How TheJobStash gathers live postings into one pool, clears out closed " +
     "ones every few hours, and scores each one against your resume on " +
     "skills, seniority, location, work authorisation and timezone.",
 });
@@ -40,7 +39,6 @@ function Step({
 
 export default async function HowItWorks() {
   const stats = await poolStats();
-  const boards = Object.values(BOARD_NAMES);
 
   return (
     <main>
@@ -70,11 +68,11 @@ export default async function HowItWorks() {
       <section className="band">
         <div className="wrap">
           <div className="max-w-[860px]">
-          <Step n="01" title="Postings are gathered from 13 job boards">
+          <Step n="01" title="Postings are gathered into one pool">
             <P>
-              The pool is built from {boards.slice(0, 3).join(", ")} and ten
-              international remote boards: {boards.slice(3).join(", ")}. Right
-              now it holds {n(stats.pool)} live postings.
+              The pool holds remote roles open to people in the Philippines and
+              local Philippine roles. Right now it holds {n(stats.pool)} live
+              postings.
             </P>
             <P>
               The same role is often posted on several boards. Each is kept as

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { poolPage, poolPages } from "@/lib/db";
-import { BOARD_NAMES, ROLE_ORDER, copyFor } from "@/lib/roles";
+import { ROLE_ORDER, copyFor } from "@/lib/roles";
 import { JsonLd, SITE_URL, pageMeta } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
@@ -39,8 +39,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     path: `/jobs/${slug}`,
     description:
       `${n(page.total)} live ${c.plural.toLowerCase()} postings open to people ` +
-      `in the Philippines, ${n(page.fresh)} posted this week, from 13 job ` +
-      `boards. See which ones fit your resume, and what blocks the rest.`,
+      `in the Philippines, ${n(page.fresh)} posted this week. ` +
+      `See which ones fit your resume, and what blocks the rest.`,
   });
 }
 
@@ -140,8 +140,7 @@ export default async function RolePage({ params }: Props) {
                       </span>
                     )}
                     <span className="text-[12px] font-bold">
-                      {BOARD_NAMES[e.source] ?? e.source}
-                      {e.posted && <> · {day(e.posted)}</>}
+                      {e.posted && day(e.posted)}
                     </span>
                   </span>
                 </li>
