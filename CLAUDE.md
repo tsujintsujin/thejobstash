@@ -163,6 +163,11 @@ on a live site.
    (`HANDOFF.md` §13 — read it before touching that route.)
 7. **Never commit** `.env.cloudflare`, `jobstash.db`, `web/seed.sql`, `outbox/`
    — real accounts, password hashes, session tokens, subscriber emails.
+8. **Never disclose where the jobs come from.** No board names, no board count
+   ("13 boards") anywhere users or crawlers can see it: page copy, meta
+   descriptions, `llms.txt`, the OG image, digests (`render.py` shows no
+   "via <board>"). Say what the product produces, not its sources. Justin's
+   rule, 2026-09-18.
 
 ---
 

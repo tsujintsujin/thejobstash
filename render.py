@@ -207,12 +207,11 @@ def _job_card(m, show_blockers):
       </div>
       <div class="meta"><span class="co">%s</span>
         <span class="%s">%s</span></div>
-      <div class="sub">%s &nbsp;&middot;&nbsp; via %s</div>""" % (
+      <div class="sub">%s</div>""" % (
         _href(j.get("url")), _esc(j.get("title")), m.score,
         _esc(j.get("company") or "Unknown company"),
         sal_class, _esc(d["salary"]),
-        _esc(j.get("location") or "Location not stated"),
-        _esc(j.get("source")))]
+        _esc(j.get("location") or "Location not stated"))]
 
     # A near-miss is the section the product exists for, so every blocker is
     # named and evidenced rather than summarised into one semicolon-joined run.

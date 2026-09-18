@@ -122,7 +122,7 @@ const STEPS = [
     n: "02",
     bg: "bg-paper",
     h: "We sweep",
-    p: "Thirteen job boards, swept every few hours, and a posting that closes is cleared out. One role posted on four boards shows up once.",
+    p: "Thousands of live postings, refreshed every few hours, and a posting that closes is cleared out. The same role posted in several places shows up once.",
   },
   {
     n: "03",
@@ -204,8 +204,8 @@ export default async function Home() {
             </h1>
             <p className="lede opacity-95 mb-[30px]">
               Upload your resume once. Each time you run it, we score
-              thousands of live postings, remote and in the Philippines, from
-              13 job boards against it and hand you the handful
+              thousands of live postings, remote and in the Philippines, against
+              it and hand you the handful
               worth your time — plus the ones that came close, and exactly what
               blocked them. Closed postings are cleared out every few hours.
             </p>
@@ -221,7 +221,6 @@ export default async function Home() {
                   label="Upload a resume — free"
                   googleReady={googleReady}
                   pool={stats.pool}
-                  sources={stats.sources}
                 />
               )}
               <Link href="/how-it-works" className="btn btn-paper">
@@ -338,8 +337,8 @@ export default async function Home() {
               <span className={STAT_L}>Added in 3 days</span>
             </div>
             <div className={`${STAT} bg-jade`}>
-              <b className={STAT_N}>{stats.sources}</b>
-              <span className={STAT_L}>Boards swept</span>
+              <b className={STAT_N}>{browse.length}</b>
+              <span className={STAT_L}>Kinds of work</span>
             </div>
             {/* Was "~20 per digest", which stopped being true when the cap
                 of 20 went (HANDOFF-DIGEST-BOXES.md). A figure under "not a
@@ -556,7 +555,6 @@ export default async function Home() {
                 label="Scan my resume — free"
                 googleReady={googleReady}
                 pool={stats.pool}
-                sources={stats.sources}
               />
             )}
           </div>

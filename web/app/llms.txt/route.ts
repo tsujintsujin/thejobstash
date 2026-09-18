@@ -9,9 +9,9 @@ export function GET() {
   const packs = PACKS.map((p) => `${p.credits} runs for PHP ${p.php}`).join(", ");
   const body = `# TheJobStash
 
-> A job matcher for people in the Philippines. Upload a resume once; each run scores thousands of live job postings from 13 job boards against it and returns the ones worth applying to, plus the near-misses and exactly what blocked each one.
+> A job matcher for people in the Philippines. Upload a resume once; each run scores thousands of live job postings against it and returns the ones worth applying to, plus the near-misses and exactly what blocked each one.
 
-- Job boards covered: JobStreet, OnlineJobs.ph, Kalibrr and ten international remote boards (We Work Remotely, Remote OK, Himalayas, Remotive and others).
+- Covers remote roles open to people in the Philippines and local Philippine roles.
 - Closed postings are cleared out every few hours.
 - What a run checks: skills, seniority, location, work authorisation and timezone.
 - Pricing: every account starts with ${FREE_CREDITS} free run. After that, credit packs: ${packs}. One credit is one run. No subscription; credits do not expire. Payment by QR Ph (GCash, Maya, bank apps).

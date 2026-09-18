@@ -31,7 +31,7 @@ export default async function Auth({
   // Real numbers on the panel. One aggregate query against D1, and a made-up
   // figure on a signup page is the kind of thing that stops being harmless
   // the moment somebody checks it.
-  const { pool, sources } = await poolStats();
+  const { pool } = await poolStats();
 
   // Jade, not the action colour: this page IS the action, so the ground
   // stays positive and flare is left free for the button that ends it.
@@ -44,7 +44,6 @@ export default async function Auth({
           googleReady={googleConfigured()}
           initialError={typeof sp.err === "string" ? sp.err.slice(0, 200) : ""}
           pool={pool}
-          sources={sources}
         />
 
       </div>

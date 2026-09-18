@@ -17,12 +17,10 @@ export default function AuthModal({
   label,
   googleReady,
   pool,
-  sources,
 }: {
   label: string;
   googleReady: boolean;
   pool: number;
-  sources: number;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -62,7 +60,6 @@ export default function AuthModal({
               next="/dashboard"
               googleReady={googleReady}
               pool={pool}
-              sources={sources}
               inModal
               onClose={() => setOpen(false)}
             />

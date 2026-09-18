@@ -23,8 +23,7 @@ export const ROLE_COPY: Record<string, RoleCopy> = {
     plural: "Remote and work-from-home",
     intro:
       "Most of the pool is remote work open to people in the Philippines: " +
-      "roles posted by overseas companies on OnlineJobs.ph and the remote " +
-      "boards, and local employers on JobStreet and Kalibrr hiring for " +
+      "roles posted by overseas companies, and local employers hiring for " +
       "work-from-home. Remote does not mean anywhere, though. A lot of " +
       "'remote' postings quietly limit who can apply by country, timezone or " +
       "work authorisation, and that is where most applications are wasted.",
@@ -332,30 +331,13 @@ export const ROLE_COPY: Record<string, RoleCopy> = {
   },
 };
 
-/** Board ids as stored in the pool, as a reader knows them. */
-export const BOARD_NAMES: Record<string, string> = {
-  jobstreet: "JobStreet",
-  onlinejobs: "OnlineJobs.ph",
-  kalibrr: "Kalibrr",
-  arbeitnow: "Arbeitnow",
-  jobicy: "Jobicy",
-  hackernews: "Hacker News",
-  weworkremotely: "We Work Remotely",
-  remoteok: "Remote OK",
-  himalayas: "Himalayas",
-  themuse: "The Muse",
-  workingnomads: "Working Nomads",
-  remotive: "Remotive",
-  jobspresso: "Jobspresso",
-};
-
 export const ROLE_ORDER = Object.keys(ROLE_COPY);
 
 export function copyFor(slug: string, name: string): RoleCopy {
   return (
     ROLE_COPY[slug] ?? {
       plural: name,
-      intro: `Live ${name.toLowerCase()} postings open to people in the Philippines, from thirteen job boards, checked every few hours.`,
+      intro: `Live ${name.toLowerCase()} postings open to people in the Philippines, checked every few hours.`,
       asks: [],
       blockers: [],
     }

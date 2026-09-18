@@ -109,7 +109,6 @@ export default function AuthCard({
   googleReady,
   initialError = "",
   pool,
-  sources,
   inModal = false,
   onClose,
 }: {
@@ -118,7 +117,6 @@ export default function AuthCard({
   googleReady: boolean;
   initialError?: string;
   pool: number;
-  sources: number;
   /** Mounted in a dialog on some other page, so the URL is not ours to edit. */
   inModal?: boolean;
   /** The dialog's close. Rendered inside the card so it travels with it. */
@@ -308,8 +306,7 @@ export default function AuthCard({
               scored against your resume each time you run it
             </>,
             <>
-              Swept from <b className="text-sun">{sources}</b> job boards every
-              few hours
+              Refreshed every few hours, so what you see is still open
             </>,
             <>The near-misses too — and exactly what blocked each one</>,
           ].map((line, i) => (
