@@ -25,9 +25,12 @@ function mmss(ms: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/* Only the recommended pack wears an accent — three coloured cards would rank
-   nothing. Jade because it is a recommendation, not a warning. */
-export default function BuyCredits() {
+/**
+ * Buying a pack, and the modal that shows its QR code. Shared by the
+ * dashboard's packs and the home page's, so a signed-in buyer on the home page
+ * pays right there. `afterPaid` runs when a paid modal closes.
+ */
+export function useBuy(afterPaid: () => void) {
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -58,10 +61,7 @@ export default function BuyCredits() {
         .catch(() => null)
         .finally(() => router.refresh());
     }
-    if (paidAt) {
-      router.refresh();
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+    if (paidAt) afterPaid();
     setPay(null);
     setPaidAt(0);
   }
@@ -103,32 +103,7 @@ export default function BuyCredits() {
   const pack = pay ? packById(pay.pack) : undefined;
   const expired = !!pay && !paidAt && now >= pay.expiresAt;
 
-  return (
-    <>
-      {err && <div className={ALERT}>{err}</div>}
-      <div className={`${G3} mb-2.5`}>
-        {PACKS.map((p, i) => (
-          <div key={p.id} className={`card ${i === 1 ? "bg-jade" : "bg-paper"}`}>
-            <b className="text-[17px]">{p.credits} credits</b>
-            <p className="text-[13px] font-semibold opacity-70 mt-1 mb-3.5">
-              ₱{chargePhp(p)}
-              {TEST_PRICE_PHP !== null && <s className="ml-1.5">₱{p.php}</s>} ·{" "}
-              {p.credits} runs
-            </p>
-            <button
-              className="btn btn-ink btn-sm"
-              onClick={() => buy(p.id)}
-              disabled={!!busy || !!pay}
-            >
-              {busy === p.id && <span className={SPINNER} />}
-              {busy === p.id ? "Making your code…" : "Buy"}
-            </button>
-          </div>
-        ))}
-      </div>
-    
-
-      {pay && pack && (
+  const modal = pay && pack && (
         <div
           className="fixed inset-0 z-[100] bg-ink/60 flex items-center
                      justify-center p-5 animate-fade"
@@ -220,7 +195,46 @@ export default function BuyCredits() {
             </div>
           </div>
         </div>
-      )}
+  );
+
+  return { buy, busy, err, open: !!pay, modal };
+}
+
+/* Only the recommended pack wears an accent — three coloured cards would rank
+   nothing. Jade because it is a recommendation, not a warning. */
+export default function BuyCredits() {
+  const router = useRouter();
+  const { buy, busy, err, open, modal } = useBuy(() => {
+    router.refresh();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  return (
+    <>
+      {err && <div className={ALERT}>{err}</div>}
+      <div className={`${G3} mb-2.5`}>
+        {PACKS.map((p, i) => (
+          <div key={p.id} className={`card ${i === 1 ? "bg-jade" : "bg-paper"}`}>
+            <b className="text-[17px]">{p.credits} credits</b>
+            <p className="text-[13px] font-semibold opacity-70 mt-1 mb-3.5">
+              ₱{chargePhp(p)}
+              {TEST_PRICE_PHP !== null && <s className="ml-1.5">₱{p.php}</s>} ·{" "}
+              {p.credits} runs
+            </p>
+            <button
+              className="btn btn-ink btn-sm"
+              onClick={() => buy(p.id)}
+              disabled={!!busy || open}
+            >
+              {busy === p.id && <span className={SPINNER} />}
+              {busy === p.id ? "Making your code…" : "Buy"}
+            </button>
+          </div>
+        ))}
+      </div>
+
+
+      {modal}
     </>
   );
 }

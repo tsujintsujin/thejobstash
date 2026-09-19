@@ -14,6 +14,7 @@ import {
 import { CONTACT_EMAIL, OPERATOR } from "./legal/shell";
 import AuthModal from "./AuthModal";
 import UploadModal from "./UploadModal";
+import BuyButton from "./BuyButton";
 
 export const dynamic = "force-dynamic";
 
@@ -498,12 +499,13 @@ export default async function Home() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href={user ? "/dashboard#buy" : "/signup"}
-                  className="btn btn-ink mt-auto text-center"
-                >
-                  {user ? "Buy credits" : "Start with 1 free run"}
-                </Link>
+                {user ? (
+                  <BuyButton pack={p.id} />
+                ) : (
+                  <Link href="/signup" className="btn btn-ink mt-auto text-center">
+                    Start with 1 free run
+                  </Link>
+                )}
               </div>
             ))}
           </div>
