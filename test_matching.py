@@ -290,6 +290,16 @@ for name, ro, lo, want_local, want_strict in [
     check("%s: local office role" % name, M.classify_geo(local, ws)[0], want_local)
     check("%s: 'onsite only' role" % name, M.classify_geo(onsite_only, ws)[0], want_strict)
 
+# Onsite means at the office: a remote role is out; hybrid and remote keep it.
+remote_ph = job("Office Admin", "Remote - Philippines", "work from home")
+for name, ro, lo, want in [
+    ("remote", True, False, "home_remote"),
+    ("hybrid", True, True, "home_remote"),
+    ("onsite", False, True, "blocked"),
+]:
+    ws = dataclasses.replace(p, remote_only=ro, wants_local_onsite=lo)
+    check("%s: remote role" % name, M.classify_geo(remote_ph, ws)[0], want)
+
 print()
 print("=" * 68)
 print("unit checks: %d passed, %d failed" % (ok, fail))
