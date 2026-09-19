@@ -18,7 +18,7 @@ import UploadModal from "./UploadModal";
 export const dynamic = "force-dynamic";
 
 export const metadata = pageMeta({
-  title: `Online jobs in the Philippines, matched to your resume — ${SITE_NAME}`,
+  title: `Online jobs in the Philippines, matched to your resume - ${SITE_NAME}`,
   absolute: true,
   path: "/",
   description: SITE_DESCRIPTION,

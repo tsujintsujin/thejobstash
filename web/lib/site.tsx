@@ -32,7 +32,7 @@ export function pageMeta(p: {
   title: string;
   description: string;
   path: string;
-  /** Skip the " — TheJobStash" suffix, for a title that already has the brand. */
+  /** Skip the " - TheJobStash" suffix, for a title that already has the brand. */
   absolute?: boolean;
 }): Metadata {
   return {
