@@ -6,7 +6,7 @@ import { JsonLd, SITE_URL, pageMeta } from "@/lib/site";
 export const dynamic = "force-dynamic";
 
 export const metadata = pageMeta({
-  title: "Job openings in the Philippines by role — online, WFH and onsite",
+  title: "Job openings in the Philippines by role - online, WFH and onsite",
   path: "/jobs",
   description:
     "Live job openings in the Philippines, grouped by the kind of work: " +

@@ -12,8 +12,8 @@ import "./globals.css";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: `${SITE_NAME} — ${SITE_TAGLINE.toLowerCase()}`,
-    template: `%s — ${SITE_NAME}`,
+    default: `${SITE_NAME} - ${SITE_TAGLINE.toLowerCase()}`,
+    template: `%s - ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
@@ -23,12 +23,12 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     locale: "en_PH",
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    title: `${SITE_NAME} - ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    title: `${SITE_NAME} - ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
   },
 };
