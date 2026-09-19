@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { ALERT, G3, SPINNER } from "../ui";
@@ -104,12 +103,7 @@ export function useBuy(afterPaid: () => void) {
   const pack = pay ? packById(pay.pack) : undefined;
   const expired = !!pay && !paidAt && now >= pay.expiresAt;
 
-  // Portalled to <body>: on the home page it opens from inside a pack card,
-  // and the cards after it would otherwise paint over it.
-  const modal =
-    pay &&
-    pack &&
-    createPortal(
+  const modal = pay && pack && (
         <div
           className="fixed inset-0 z-[100] bg-ink/60 flex items-center
                      justify-center p-5 animate-fade"
@@ -201,9 +195,7 @@ export function useBuy(afterPaid: () => void) {
             </div>
           </div>
         </div>
-  ,
-      document.body
-    );
+  );
 
   return { buy, busy, err, open: !!pay, modal };
 }
