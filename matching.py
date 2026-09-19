@@ -105,7 +105,8 @@ class Match:
     # strength of also being in the wrong city: HR Coordinator and Sales
     # Operations Coordinator were rendering under "Came close" with the reason
     # "Centres on work outside your field" printed next to them.
-    VETO_BLOCKERS = {"off_field"}
+    # A remote role for someone who chose onsite is the same: not a near-miss.
+    VETO_BLOCKERS = {"off_field", "remote"}
 
     @property
     def showable(self):
@@ -381,6 +382,13 @@ def classify_geo(job, profile):
 
     remote = ("remote" in hay or "worldwide" in hay or "anywhere" in hay
               or "distributed" in hay)
+
+    # Onsite (the dashboard's remote_only=False + wants_local_onsite) means at
+    # the employer's office. A remote role is the opposite, not a near-miss,
+    # so it is blocked and vetoed out of the near-miss list (VETO_BLOCKERS).
+    # ponytail: same crude "remote" substring the tiers below use.
+    if remote and not profile.remote_only and profile.wants_local_onsite:
+        return "blocked", Blocker("remote", "Remote role - you chose onsite")
 
     if profile.remote_only and any(m in hay for m in ONSITE_ONLY_MARKERS):
         return "blocked", Blocker("onsite", "This role is onsite only")

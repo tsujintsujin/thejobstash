@@ -46,6 +46,7 @@ BLOCKER_LABEL = {
     "thin_skills":   "Skills",
     "authorisation": "Work authorisation",
     "onsite":        "Onsite only",
+    "remote":        "Remote",
     "skill_gap":     "Different stack",
     "clearance":     "Security clearance",
     "off_field":     "Different field",

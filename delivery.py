@@ -161,6 +161,7 @@ def _blocker_copy(blockers):
         "thin_skills":   "%d leaned on tools that are not on your resume",
         "authorisation": "%d required work authorisation you do not hold",
         "onsite":        "%d were onsite only",
+        "remote":        "%d were remote",
         "skill_gap":     "%d centred on a technology you have not listed",
         "clearance":     "%d required a government security clearance",
     }
