@@ -71,6 +71,19 @@ def _days_ago(n):
             - datetime.timedelta(days=n)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def _resume_name(conn, user_id):
+    r = conn.execute("SELECT resume_name FROM profiles WHERE user_id=?",
+                     (user_id,)).fetchone()
+    return (r["resume_name"] if r else "") or ""
+
+
+def _work_setup(profile):
+    """remote | hybrid | onsite - same rule as web/lib/workSetup.ts."""
+    if not profile.wants_local_onsite:
+        return "remote"
+    return "onsite" if profile.remote_only is False else "hybrid"
+
+
 def build_digest(conn, user_id, per_tier_max=PER_TIER_MAX):
     """Score the pool for one user and lay out their sections. Writes nothing."""
     pdict = db.get_profile(conn, user_id)
@@ -141,9 +154,15 @@ def build_digest(conn, user_id, per_tier_max=PER_TIER_MAX):
         "thin": len(picked) < FLOOR,
         "blockers": blockers,
         "blocker_copy": _blocker_copy(blockers),
+        # The settings this run was scored with, so a row in the stash keeps
+        # saying what it was run with after the user changes any of them.
+        # `name` and `setup` are here for the dashboard's row title; a row
+        # written before them falls back to the profile as it stands now.
         "profile": {"level": profile.level, "years": profile.years_experience,
                     "country": profile.home_country,
-                    "skills": len(profile.strong_skills)},
+                    "skills": len(profile.strong_skills),
+                    "name": _resume_name(conn, user_id),
+                    "setup": _work_setup(profile)},
     }
 
     return {"sections": sections, "summary": summary, "profile": profile}

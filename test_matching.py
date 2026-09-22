@@ -300,6 +300,16 @@ for name, ro, lo, want in [
     ws = dataclasses.replace(p, remote_only=ro, wants_local_onsite=lo)
     check("%s: remote role" % name, M.classify_geo(remote_ph, ws)[0], want)
 
+# The name the dashboard's Stash row prints for the setup a run was scored
+# with. Same three cases as workSetupOf() in web/lib/workSetup.ts; the row
+# reads this out of the digest, so a wrong label misreports history.
+import delivery as D
+for name, ro, lo in [("remote", True, False), ("hybrid", True, True),
+                     ("onsite", False, True)]:
+    check("work setup label: %s" % name,
+          D._work_setup(dataclasses.replace(p, remote_only=ro,
+                                            wants_local_onsite=lo)), name)
+
 print()
 print("=" * 68)
 print("unit checks: %d passed, %d failed" % (ok, fail))
