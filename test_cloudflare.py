@@ -12,7 +12,7 @@ symptom otherwise appears as a wrong digest, not an error.
 
 No network. Nothing here talks to Cloudflare.
 """
-import io, json, os, re, sqlite3, sys, tempfile
+import datetime, io, json, os, re, sqlite3, sys, tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import d1, db, api_bridge
@@ -160,6 +160,39 @@ check("web and python agree on rounds",
       int(m.group(1)) if m else None, db.PBKDF2_ROUNDS)
 check("password verifies", db.verify_password("hunter2hunter2", h), True)
 check("wrong password refused", db.verify_password("nope", h), False)
+
+# ---------------------------------------------------------------------------
+section("a digest is dated in Manila, not UTC")
+# ---------------------------------------------------------------------------
+# `day` is the label on a Stash row and the name of a downloaded PDF, so it is
+# the one value that has to be the user's day rather than UTC's. PH is UTC+8:
+# stamped in UTC, every run between midnight and 8am Manila carried yesterday's
+# date. Frozen at 23:55Z on the 21st - 7:55am Manila on the 22nd - because that
+# is the window where the two disagree, and a test run at any other hour would
+# pass either way.
+class _FrozenClock(object):
+    timezone, timedelta = datetime.timezone, datetime.timedelta
+
+    class datetime(object):
+        AT = None
+
+        @staticmethod
+        def now(tz=None):
+            at = _FrozenClock.datetime.AT
+            return at.astimezone(tz) if tz else at
+
+
+_FrozenClock.datetime.AT = datetime.datetime(
+    2026, 9, 21, 23, 55, tzinfo=datetime.timezone.utc)
+_real_datetime, db.datetime = db.datetime, _FrozenClock
+try:
+    check("7:55am Manila is stamped that morning, not the night before",
+          db.today_iso(), "2026-09-22")
+    # Timestamps stay UTC. Only the user-facing day moved.
+    check("now_iso() is still UTC", db.now_iso(), "2026-09-21T23:55:00Z")
+finally:
+    db.datetime = _real_datetime
+
 
 # ---------------------------------------------------------------------------
 print("\n" + "=" * 68)

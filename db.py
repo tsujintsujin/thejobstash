@@ -93,8 +93,18 @@ def now_iso():
         "%Y-%m-%dT%H:%M:%SZ")
 
 
+# The date a user sees on their digest, in their own day - not UTC's.
+# Everything else here is UTC on purpose (now_iso, the SQL `datetime('now')`),
+# but `day` is the label on a Stash row and the name of a downloaded PDF, and
+# PH is UTC+8: a run at 7am Manila is still yesterday in UTC, so every run
+# between midnight and 8am was stamped with the wrong day. Fixed offset rather
+# than zoneinfo because the Philippines has had no DST since 1978 and tzdata
+# is not installed on the scorer machine.
+MANILA = datetime.timezone(datetime.timedelta(hours=8))
+
+
 def today_iso():
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    return datetime.datetime.now(MANILA).strftime("%Y-%m-%d")
 
 
 def new_id(prefix=""):
