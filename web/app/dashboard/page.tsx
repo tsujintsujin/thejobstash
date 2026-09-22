@@ -8,7 +8,7 @@ import BuyCredits from "./BuyCredits";
 import SkillToggles from "./SkillToggles";
 import WorkSetupSelect from "./WorkSetupSelect";
 import ExperienceCounter from "./ExperienceCounter";
-import { workSetupOf } from "@/lib/workSetup";
+import { workSetupOf, WORK_SETUP_LABEL, type WorkSetup } from "@/lib/workSetup";
 import { STAT, STAT_L, STAT_N } from "../ui";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,22 @@ const FACT_V =
 /* One box per section of a digest, written by render.py into summary_json.
    A row from before the boxes existed has none, and falls back to View. */
 type Part = { key: string; count: number; label: string; colour: string; pdf?: boolean };
+
+/* The settings a run was scored with, written by delivery.py into
+   summary_json.profile. A row from before those fields existed has no name or
+   setup, and the caller falls back to the profile as it stands now. */
+function settingsOf(summaryJson: unknown): {
+  name?: string;
+  years?: number | null;
+  setup?: string;
+} {
+  if (typeof summaryJson !== "string") return {};
+  try {
+    return JSON.parse(summaryJson)?.profile ?? {};
+  } catch {
+    return {};
+  }
+}
 
 function partsOf(summaryJson: unknown): Part[] {
   if (typeof summaryJson !== "string") return [];
@@ -210,22 +226,44 @@ export default async function Dashboard() {
             <div className="sechead bg-paper">
               <h2 className="text-xl">Stash</h2>
             </div>
-            {deliveries.map((d) => (
+            {deliveries.map((d) => {
+              /* What this run was scored with. Read off the digest itself, so
+                 changing the resume or the work setup later does not rewrite
+                 the history of runs made before it. Rows written before those
+                 fields existed fall back to the profile as it stands. */
+              const st = settingsOf(d.summary_json);
+              const setup = (st.setup ??
+                (parsed ? workSetupOf(parsed) : null)) as WorkSetup | null;
+              const years = st.years ?? parsed?.years_experience ?? null;
+              const meta = [
+                d.day,
+                setup ? WORK_SETUP_LABEL[setup] : null,
+                years != null ? `${years} yr${years === 1 ? "" : "s"}` : null,
+                `${d.matches} match${d.matches === 1 ? "" : "es"}`,
+              ].filter(Boolean);
+              return (
               <div
                 className="border-3 border-ink bg-paper text-ink shadow-brut-sm px-[18px] py-4 mb-3"
                 key={d.id}
               >
-                {/* One line on a desktop width. Below 720px the row is
-                    narrower than the date plus three boxes plus the trash, and
-                    they used to sit on top of each other - so the boxes drop
-                    to their own full-width line underneath instead. */}
-                <div className="flex flex-wrap gap-3.5 items-center">
-                  <div className="shrink-0">
-                    <h3 className="text-[17px]">{d.day}</h3>
-                    <div className="text-[13.5px] font-semibold mt-1.5 whitespace-nowrap">
-                      <b className="font-extrabold">{d.matches}</b> matches
-                    </div>
+                {/* The title area: which resume was run, and under what
+                    settings. It carries what used to sit to the left of the
+                    boxes - and the trash, which below 720px was otherwise
+                    left stranded on a line of its own - so the boxes get the
+                    whole width underneath at every size. */}
+                <div className="flex items-start gap-3 pb-2.5 mb-3 border-b-3 border-ink">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[15.5px] leading-tight break-words">
+                      {st.name || profile?.resume_name || "Resume"}
+                    </h3>
+                    <p className="text-[12.5px] font-semibold opacity-70 mt-[3px]">
+                      {meta.join(" · ")}
+                    </p>
                   </div>
+                  <DeleteDigest id={d.id} day={d.day} />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 items-center">
                   {/* ?v= is a cache-buster, not a parameter the route reads.
                       A 410 from before the download fix is still sitting in
                       browsers; 410 is heuristically cacheable and the route's
@@ -248,7 +286,7 @@ export default async function Dashboard() {
                     // the button away from every digest already in the stash.
                     if (!parts.length)
                       return (
-                        <div className="flex gap-[7px] ml-auto shrink-0">
+                        <div className="flex gap-[7px] shrink-0">
                           <a
                             className="btn btn-paper btn-sm"
                             href={`/api/download/${d.id}?format=html&v=${v}`}
@@ -268,7 +306,7 @@ export default async function Dashboard() {
                         </div>
                       );
                     return (
-                      <div className="flex gap-1.5 flex-1 min-w-0 max-[720px]:order-last max-[720px]:basis-full max-[720px]:flex-none">
+                      <div className="flex gap-1.5 flex-1 min-w-0">
                         {parts.map((p) => (
                           <div
                             key={p.key}
@@ -315,16 +353,10 @@ export default async function Dashboard() {
                       </div>
                     );
                   })()}
-                  <div className="flex gap-[7px] shrink-0 items-center max-[720px]:ml-auto">
-                    <span
-                      aria-hidden="true"
-                      className="self-stretch w-[3px] bg-ink opacity-25 mx-0.5 max-[720px]:hidden"
-                    />
-                    <DeleteDigest id={d.id} day={d.day} />
-                  </div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </>
         )}
       </div>
