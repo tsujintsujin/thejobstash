@@ -51,6 +51,22 @@ that would target that search directly.
   why the result still showed the old snippet and a blank favicon.
 - Bing Webmaster Tools: imported from Search Console; sitemap submitted
   2026-09-18.
+- Search Console API (2026-09-24): enabled in Cloud project `thejobstash`.
+  The SEO loop (`~/.claude/seo-loop`, daily capture + weekly auto-apply) reads
+  it through a separate **Desktop** OAuth client named `seo-loop`, never the
+  site's Web client. Credential files are indexed in
+  `D:\AIO Freelance\Credentials\README.md`.
+
+## Google Auth Platform: must stay "In production"
+
+Until 2026-09-24 the project's OAuth app sat in **Testing** with **zero test
+users**. The site's own sign-in (`openid email profile`) still worked for
+outsiders — D1 shows a non-Justin Google account linked 2026-09-17 — but
+the SEO loop's Search Console scope got "Access blocked" for every account,
+and Testing expires refresh tokens after 7 days. It was published that day
+(Branding now lists home, `/privacy`, `/terms`; authorized domain
+`thejobstash.com`) and site sign-in was re-tested live. **Never press "Back to
+testing"** — the SEO pull would silently stop within a week.
 
 ## What only Justin can do
 
