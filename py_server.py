@@ -21,7 +21,7 @@ opened.
 
 Endpoints (all but /healthz require the bearer token):
 
-    GET  /healthz                      -> {"ok": true}
+    GET  /healthz                      -> {"ok": true} only when n8n is up too
     GET  /stats                        -> pool counts
     POST /parse    ?name=<filename>    body = the raw resume bytes
     POST /preview  body {"user_id": …}
@@ -47,6 +47,8 @@ ALLOWED_EXT = (".pdf", ".docx", ".txt", ".md")
 # Localhost only: n8n is never exposed through the tunnel.
 N8N_RUN_URL = os.environ.get("JOBSTASH_N8N_RUN_URL",
                              "http://127.0.0.1:5678/webhook/jobstash-run")
+N8N_HEALTH_URL = os.environ.get("JOBSTASH_N8N_HEALTH_URL",
+                                "http://127.0.0.1:5678/healthz")
 USER_ID = re.compile(r"^usr_[0-9a-f]{16}$")
 RUN_ID = re.compile(r"^run_[0-9a-f]{16}$")
 
@@ -97,7 +99,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         route = urlparse(self.path).path.rstrip("/") or "/"
         if route == "/healthz":
-            return self._send({"ok": True})
+            # The site's maintenance notice reads this. Reaching it at all
+            # proves py_server and the tunnel; a run also needs n8n.
+            return self._send({"ok": _n8n_up()})
         if not self._authed():
             return self._send({"ok": False, "error": "unauthorised"}, 401)
         if route == "/stats":
@@ -274,6 +278,14 @@ def main():
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n[py] stopped")
+
+
+def _n8n_up():
+    try:
+        with urllib.request.urlopen(N8N_HEALTH_URL, timeout=3) as res:
+            return res.status == 200
+    except Exception:                           # noqa: BLE001
+        return False
 
 
 def _d1():
