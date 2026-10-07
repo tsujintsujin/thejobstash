@@ -61,6 +61,23 @@ export async function pyGetFile(
   }
 }
 
+/**
+ * Is everything a resume needs up: py_server, the tunnel and n8n? `/healthz`
+ * answers ok only when n8n answers too. Drives the maintenance notice.
+ */
+export async function scorerUp(timeoutMs = 4000): Promise<boolean> {
+  const cfg = config();
+  if (!cfg) return false;
+  try {
+    const res = await fetch(cfg.origin + "/healthz", {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return res.ok && ((await res.json()) as any).ok === true;
+  } catch {
+    return false;
+  }
+}
+
 async function call(
   path: string,
   init: RequestInit,

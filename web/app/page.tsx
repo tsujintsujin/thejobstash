@@ -14,6 +14,7 @@ import {
 import { CONTACT_EMAIL, OPERATOR } from "./legal/shell";
 import AuthModal from "./AuthModal";
 import UploadModal from "./UploadModal";
+import ScorerNotice from "./ScorerNotice";
 import BuyButton from "./BuyButton";
 
 export const dynamic = "force-dynamic";
@@ -213,6 +214,7 @@ export default async function Home() {
               worth your time — plus the ones that came close, and exactly what
               blocked them. Closed postings are cleared out every few hours.
             </p>
+            <ScorerNotice className="mb-[18px]" />
             <div className="flex gap-3.5 flex-wrap">
               {/* Scoring costs one machine real work, so nothing runs a
                   resume without an account behind it. Signed out, this opens
@@ -552,6 +554,7 @@ export default async function Home() {
             Takes about thirty seconds to set up, and your first run is
             on us.
           </p>
+          <ScorerNotice className="mb-[18px] text-left" />
           <div className="flex justify-center">
             {user ? (
               <UploadModal label="Upload resume" />

@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ALERT, ALERT_OK, SPINNER } from "./ui";
+import { useScorerUp, ScorerDownNote } from "./ScorerNotice";
 
 type Diag = {
   skills_found: number;
@@ -29,6 +30,9 @@ export default function UploadCard({ inModal = false }: { inModal?: boolean }) {
   const [over, setOver] = useState(false);
   const [diag, setDiag] = useState<Diag | null>(null);
   const [name, setName] = useState("");
+  // Down: say so and take no file. Still asking (null): show the drop zone;
+  // the server refuses an upload anyway if the scorer is gone.
+  const up = useScorerUp();
 
   async function upload(file: File) {
     setErr("");
@@ -70,9 +74,11 @@ export default function UploadCard({ inModal = false }: { inModal?: boolean }) {
         .
       </p>
 
+      {up === false && <ScorerDownNote className="mb-[18px]" />}
+
       {err && <div className={ALERT}>{err}</div>}
 
-      {!diag && (
+      {!diag && up !== false && (
         <>
           <div
             className={`border-3 border-dashed border-ink text-center
